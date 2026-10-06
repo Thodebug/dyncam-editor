@@ -37,16 +37,7 @@ Serve the folder with any static web server, for example:
 python -m http.server 8000
 ```
 
-Then open http://localhost:8000.
-
-## Publish with GitHub Pages
-
-1. Push the repository to GitHub.
-2. In the repository, open **Settings › Pages**.
-3. Under **Build and deployment**, choose **Deploy from a branch**, the `main` branch and the `/ (root)` folder.
-
-The editor is then available at `https://<user>.github.io/<repository>/`. There is no build step: the files
-of the repository are the site.
+Then open http://localhost:8000. There is no build step: the files of the repository are the site.
 
 ## Project structure
 
