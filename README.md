@@ -1,5 +1,7 @@
 # Dyncam editor
 
+**Open the editor: https://thodebug.github.io/dyncam-editor/**
+
 Set the [DDNet](https://ddnet.org) camera settings on the real game view, then copy the console commands.
 
 DDNet's menu only has two checkboxes for the camera (Dynamic Camera and Smooth Dynamic Camera). Every other
