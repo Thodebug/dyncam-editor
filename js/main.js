@@ -63,6 +63,12 @@ function fitPageLayout(aspect) {
   page.style.gridTemplateColumns = `${Math.floor(viewWidth)}px minmax(0, 1fr)`;
 }
 
+/** Sets the text of an element, only when it changes. */
+function setText(element, text) {
+  const value = String(text);
+  if (element.textContent !== value) element.textContent = value;
+}
+
 /** Shows a switch button as checked or not. */
 function setSwitch(button, checked) {
   button.setAttribute('aria-checked', String(checked));
@@ -206,11 +212,11 @@ async function start() {
     const onScreenX = cursor.position.x - offset.x;
     const onScreenY = cursor.position.y - offset.y;
     const towardCursor = Math.sign(onScreenX * cursor.direction.x + onScreenY * cursor.direction.y || 1);
-    byId('readout-cursor').textContent = Math.round(cursor.distance);
-    byId('readout-cursor-max').textContent = Math.round(limits.effectiveMax);
-    byId('readout-offset').textContent = Math.round(Math.hypot(offset.x, offset.y));
-    byId('readout-offset-max').textContent = Math.round(cameraOffsetAt(limits.effectiveMax, limits));
-    byId('readout-screen').textContent = signed(Math.round(Math.hypot(onScreenX, onScreenY) * towardCursor));
+    setText(byId('readout-cursor'), Math.round(cursor.distance));
+    setText(byId('readout-cursor-max'), Math.round(limits.effectiveMax));
+    setText(byId('readout-offset'), Math.round(Math.hypot(offset.x, offset.y)));
+    setText(byId('readout-offset-max'), Math.round(cameraOffsetAt(limits.effectiveMax, limits)));
+    setText(byId('readout-screen'), signed(Math.round(Math.hypot(onScreenX, onScreenY) * towardCursor)));
   };
 
   new ResizeObserver(() => gameView.resize()).observe(stage);

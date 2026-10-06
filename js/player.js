@@ -5,6 +5,10 @@ import { Hook } from './hook.js';
 /** Ticks between two hammer hits: firedelay 125 ms (datasrc/content.py) × 50 ticks / 1000. */
 const HAMMER_RELOAD_TICKS = Math.floor((125 * 50) / 1000);
 
+/** Duration of the weapon recoil after a shot, and of the hammer swing (0.2 s), in ticks. */
+const RECOIL_TICKS = 5;
+const HAMMER_SWING_TICKS = 10;
+
 /** The server shows the blink emote 5 s after the last input change, for 4 ticks, then every 5 s. */
 const BLINK_PERIOD_TICKS = 250;
 const BLINK_TICKS = 5;
@@ -129,10 +133,10 @@ export class Player {
     const tick = gameTick(now);
     const ticksSinceAttack = tick - this.attackTick;
 
-    const recoilProgress = ticksSinceAttack / 5;
+    const recoilProgress = ticksSinceAttack / RECOIL_TICKS;
     const recoil = recoilProgress >= 0 && recoilProgress < 1 ? Math.sin(recoilProgress * Math.PI) : 0;
 
-    const swingProgress = Math.min(Math.max((ticksSinceAttack * TICK_MS * 5) / 1000, 0), 1);
+    const swingProgress = Math.min(Math.max(ticksSinceAttack / HAMMER_SWING_TICKS, 0), 1);
 
     const sinceAction = Math.floor(tick) - this.lastActionTick;
     const blinking = BLINK_PERIOD_TICKS - (sinceAction % BLINK_PERIOD_TICKS) < BLINK_TICKS;
@@ -144,7 +148,8 @@ export class Player {
   isAnimating(now) {
     const tick = gameTick(now);
     const ticksSinceAttack = tick - this.attackTick;
-    return this.laser.isActive() || this.hook.isMoving(tick) || ticksSinceAttack < 5;
+    const attackAnimating = ticksSinceAttack < Math.max(RECOIL_TICKS, HAMMER_SWING_TICKS);
+    return this.laser.isActive() || this.hook.isMoving(tick) || attackAnimating;
   }
 
   /** Time in ms until the next blink starts or ends. */

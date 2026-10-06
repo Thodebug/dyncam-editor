@@ -1,4 +1,4 @@
-import { CameraSmoothing, cameraOffsetAt, cursorFromMouse, cursorLimits } from './camera.js';
+import { CAMERA_MAX_DISTANCE, CameraSmoothing, cameraOffsetAt, cursorFromMouse, cursorLimits } from './camera.js';
 import { gameTick } from './player.js';
 
 /**
@@ -102,6 +102,27 @@ function renderSky(width, height, viewWidth, viewHeight) {
   return canvas;
 }
 
+/** Bounding box of the non-transparent pixels of an image: { left, top, right, bottom }, right and bottom excluded. */
+function opaqueBounds(image) {
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  context.drawImage(image, 0, 0);
+  const alpha = context.getImageData(0, 0, image.width, image.height).data;
+  const bounds = { left: image.width, top: image.height, right: 0, bottom: 0 };
+  for (let y = 0; y < image.height; y++) {
+    for (let x = 0; x < image.width; x++) {
+      if (alpha[(y * image.width + x) * 4 + 3] === 0) continue;
+      bounds.left = Math.min(bounds.left, x);
+      bounds.right = Math.max(bounds.right, x + 1);
+      bounds.top = Math.min(bounds.top, y);
+      bounds.bottom = Math.max(bounds.bottom, y + 1);
+    }
+  }
+  return bounds;
+}
+
 /** Canvas showing the game as DDNet renders it: map, tee, laser, hook, cursor and distance circles. */
 export class GameView {
   /**
@@ -130,6 +151,9 @@ export class GameView {
     this.ringCache = null;
     this.frameRequest = 0;
     this.blinkTimer = 0;
+    this.layerBounds = Object.fromEntries(
+      [...LAYERS_BEHIND, ...LAYERS_IN_FRONT].map((layer) => [layer.name, opaqueBounds(images[layer.name])]),
+    );
 
     const style = getComputedStyle(document.documentElement);
     this.font = style.getPropertyValue('--font').trim();
@@ -162,41 +186,64 @@ export class GameView {
     this.requestRender();
   }
 
-  /** Prepares the sky and resamples each layer once for the current canvas size, so frames only copy pixels. */
+  /**
+   * Prepares the sky and resamples each layer once for the current canvas size, so frames only copy pixels.
+   * Each resampled layer keeps only the part that can appear on screen: its non-transparent pixels, within
+   * the area the camera can reach (the camera offset never exceeds CAMERA_MAX_DISTANCE).
+   */
   scaleLayers() {
     const { width, height } = this.canvas;
-    const resample = (image, targetWidth, targetHeight) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(targetWidth));
-      canvas.height = Math.max(1, Math.round(targetHeight));
-      const context = canvas.getContext('2d');
-      context.imageSmoothingEnabled = true;
-      context.imageSmoothingQuality = 'high';
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      return canvas;
-    };
+    const scaleX = width / this.screen.width;
+    const scaleY = height / this.screen.height;
+    const layers = { sky: { canvas: renderSky(width, height, this.screen.width, this.screen.height), left: 0, top: 0 } };
 
-    const layers = { sky: renderSky(width, height, this.screen.width, this.screen.height) };
-    // IGraphics::MapScreenToWorld(): a layer with parallax p shows (p × (zoom − 1) + 100) / 100 times the zoom 1 view.
     for (const layer of [...LAYERS_BEHIND, ...LAYERS_IN_FRONT]) {
+      const image = this.images[layer.name];
+      // IGraphics::MapScreenToWorld(): a layer with parallax p shows (p × (zoom − 1) + 100) / 100 times the zoom 1 view.
       const parallax = Math.min(Math.max(layer.parallaxX, layer.parallaxY), 100);
       const factor = (parallax * (CAPTURE_ZOOM - 1) + 100) / 100;
-      layers[layer.name] = resample(
-        this.images[layer.name],
-        CAPTURE_SCREEN.width * factor * (width / this.screen.width),
-        CAPTURE_SCREEN.height * factor * (height / this.screen.height),
-      );
+      const fullWidth = Math.max(1, Math.round(CAPTURE_SCREEN.width * factor * scaleX));
+      const fullHeight = Math.max(1, Math.round(CAPTURE_SCREEN.height * factor * scaleY));
+
+      // Reachable area, in pixels of the resampled layer, with 2 pixels of margin for rounding
+      const reachX = (CAMERA_MAX_DISTANCE + Math.abs(TEE_POSITION.x - CAPTURE_CAMERA.x)) * (layer.parallaxX / 100) * scaleX;
+      const reachY = (CAMERA_MAX_DISTANCE + Math.abs(TEE_POSITION.y - CAPTURE_CAMERA.y)) * (layer.parallaxY / 100) * scaleY;
+      // Non-transparent pixels, with 2 source pixels of margin for the resampling filter
+      const bounds = this.layerBounds[layer.name];
+      const ratioX = fullWidth / image.width;
+      const ratioY = fullHeight / image.height;
+
+      const left = Math.max(0, Math.floor(fullWidth / 2 - width / 2 - reachX - 2), Math.floor((bounds.left - 2) * ratioX));
+      const right = Math.min(fullWidth, Math.ceil(fullWidth / 2 + width / 2 + reachX + 2), Math.ceil((bounds.right + 2) * ratioX));
+      const top = Math.max(0, Math.floor(fullHeight / 2 - height / 2 - reachY - 2), Math.floor((bounds.top - 2) * ratioY));
+      const bottom = Math.min(fullHeight, Math.ceil(fullHeight / 2 + height / 2 + reachY + 2), Math.ceil((bounds.bottom + 2) * ratioY));
+      if (right <= left || bottom <= top) continue;
+
+      const full = document.createElement('canvas');
+      full.width = fullWidth;
+      full.height = fullHeight;
+      const fullContext = full.getContext('2d');
+      fullContext.imageSmoothingEnabled = true;
+      fullContext.imageSmoothingQuality = 'high';
+      fullContext.drawImage(image, 0, 0, fullWidth, fullHeight);
+
+      const kept = document.createElement('canvas');
+      kept.width = right - left;
+      kept.height = bottom - top;
+      kept.getContext('2d').drawImage(full, -left, -top);
+      layers[layer.name] = { canvas: kept, left, top, fullWidth, fullHeight };
     }
     this.scaledLayers = layers;
   }
 
   /** Draws a layer for a camera at `camera` units from CAPTURE_CAMERA. */
   drawLayer(layer, camera) {
-    const image = this.scaledLayers[layer.name];
+    const scaled = this.scaledLayers[layer.name];
+    if (!scaled) return;
     const { width, height } = this.canvas;
-    const x = width / 2 - image.width / 2 - ((camera.x * layer.parallaxX) / 100) * (width / this.screen.width);
-    const y = height / 2 - image.height / 2 - ((camera.y * layer.parallaxY) / 100) * (height / this.screen.height);
-    this.context.drawImage(image, Math.round(x), Math.round(y));
+    const x = width / 2 - scaled.fullWidth / 2 - ((camera.x * layer.parallaxX) / 100) * (width / this.screen.width);
+    const y = height / 2 - scaled.fullHeight / 2 - ((camera.y * layer.parallaxY) / 100) * (height / this.screen.height);
+    this.context.drawImage(scaled.canvas, Math.round(x) + scaled.left, Math.round(y) + scaled.top);
   }
 
   render({ hideHint = false } = {}) {
@@ -225,7 +272,7 @@ export class GameView {
       x: offset.x + TEE_POSITION.x - CAPTURE_CAMERA.x,
       y: offset.y + TEE_POSITION.y - CAPTURE_CAMERA.y,
     };
-    context.drawImage(this.scaledLayers.sky, 0, 0);
+    context.drawImage(this.scaledLayers.sky.canvas, 0, 0);
     for (const layer of LAYERS_BEHIND) this.drawLayer(layer, layerCamera);
 
     // Items, then the player, as in the game
