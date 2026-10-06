@@ -786,9 +786,6 @@ h2 .checkbox-button {
 .setting-message {
   margin-top: calc(2 * var(--u));
   font-size: calc(10 * var(--u));
-}
-
-.setting-message.is-warning {
   color: var(--warning);
 }
 
@@ -875,7 +872,7 @@ input[type="range"]:active::-webkit-slider-thumb {
 .tooltip {
   position: fixed;
   z-index: 20;
-  max-width: min(calc(260 * var(--u)), calc(100vw - 20px));
+  max-width: min(calc(300 * var(--u)), calc(100vw - 20px));
   padding: calc(5 * var(--u));
   border-radius: calc(5 * var(--u));
   background: var(--tooltip);
@@ -888,6 +885,51 @@ input[type="range"]:active::-webkit-slider-thumb {
 
 .tooltip.is-visible {
   opacity: 1;
+}
+
+/* Tooltip text keeps its line breaks; formulas, notes and the range line are blocks of their own */
+.tooltip {
+  white-space: pre-line;
+}
+
+.tooltip b {
+  font-weight: 700;
+}
+
+.tip-note {
+  margin-top: calc(5 * var(--u));
+}
+
+.tip-formula {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  margin-top: calc(5 * var(--u));
+  white-space: nowrap;
+}
+
+.tip-fraction {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.25;
+}
+
+.tip-fraction > span:first-child {
+  padding: 0 0.25em;
+  border-bottom: 1px solid currentColor;
+}
+
+.tip-value {
+  font-weight: 700;
+}
+
+.tip-footer {
+  margin-top: calc(6 * var(--u));
+  padding-top: calc(4 * var(--u));
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: calc(10 * var(--u));
+  opacity: 0.7;
 }
 
 @media (prefers-reduced-motion: reduce) {

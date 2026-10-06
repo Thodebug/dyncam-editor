@@ -23,7 +23,8 @@ This editor shows what each value does, on the ctf5 map, exactly as the game dra
 - The tee behaves like in game: the laser fires with real collisions and bounces (classic fng tuning) and recoil,
   the hammer swings, the hook flies, grabs or retracts on the map, and the tee blinks when idle.
   Left click fires, right click hooks, the mouse wheel switches between laser and hammer.
-- Notes under each setting when a value has no effect, and warnings for settings that lock the camera or the cursor.
+- Tooltips with the live limit formula and the values that have no effect, and warnings for settings that lock
+  the camera or the cursor.
 - Commands ready to paste in the game console, with an option to list only the changed values.
 - Share link, paste or drop of `settings_ddnet.cfg`, reset with undo, image of the view for Discord.
 - The last config is kept in the browser.

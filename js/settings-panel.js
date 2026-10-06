@@ -1,5 +1,6 @@
-import { SETTINGS } from './settings.js';
-import { cursorLimits } from './camera.js';
+import { SETTINGS, SETTINGS_BY_NAME } from './settings.js';
+import { CAMERA_MAX_DISTANCE, cursorLimits } from './camera.js';
+import { coloredValue, fraction, tipMarkup } from './tooltip.js';
 
 /** Half the width of a slider knob, in UI units: the knob center can't get closer to the rail ends. */
 const KNOB_HALF_WIDTH = 16.5;
@@ -14,53 +15,70 @@ function sliderMaximum(setting) {
 }
 
 /**
- * Explains how the game uses the current values.
+ * Configuration traps of the current values.
  * Returns, by setting name:
- * - messages: { text, warning } shown under the setting (warning = a configuration trap)
+ * - warnings: text shown under the setting
  * - inactiveFrom: the value from which the setting has no effect, to grey out the rest of the rail
  */
 export function describeSettings(values) {
-  const messages = {};
+  const warnings = {};
   const inactiveFrom = {};
 
   for (const dyncam of [true, false]) {
     const limits = cursorLimits(values, dyncam);
     const prefix = dyncam ? 'cl_dyncam_' : 'cl_mouse_';
-    const followFactorName = dyncam ? 'cl_dyncam_follow_factor' : 'cl_mouse_followfactor';
-    const effectiveMax = Math.round(limits.effectiveMax);
 
     if (limits.followFactor === 0) {
-      messages[prefix + 'deadzone'] = { text: `No effect while ${followFactorName} is 0.` };
       inactiveFrom[prefix + 'deadzone'] = 0;
     } else if (limits.deadzone >= limits.maxDistance) {
-      messages[prefix + 'deadzone'] = {
-        text: `The camera never moves: the deadzone reaches ${prefix}max_distance (${limits.maxDistance}).`,
-        warning: true,
-      };
+      warnings[prefix + 'deadzone'] = 'Camera never moves (deadzone ≥ max_distance).';
       inactiveFrom[prefix + 'deadzone'] = limits.maxDistance;
     }
 
-    if (limits.effectiveMax < limits.maxDistance) {
-      messages[prefix + 'max_distance'] = {
-        text: `Effective max: ${effectiveMax} (deadzone + follow factor). Higher values do nothing.`,
-      };
-      inactiveFrom[prefix + 'max_distance'] = limits.effectiveMax;
-    }
+    if (limits.effectiveMax < limits.maxDistance) inactiveFrom[prefix + 'max_distance'] = limits.effectiveMax;
 
     if (limits.minDistance > 0 && limits.minDistance >= limits.effectiveMax) {
-      messages[prefix + 'min_distance'] = {
-        text: `The cursor is locked ${effectiveMax} units from your tee: min ≥ max cursor distance (${effectiveMax}).`,
-        warning: true,
-      };
+      warnings[prefix + 'min_distance'] = `Cursor stuck at ${Math.round(limits.effectiveMax)} (min ≥ max distance).`;
       inactiveFrom[prefix + 'min_distance'] = limits.effectiveMax;
     }
   }
 
-  if (values.cl_dyncam_smoothness === 0 && values.cl_dyncam_stabilizing > 0) {
-    messages.cl_dyncam_stabilizing = { text: 'No effect while cl_dyncam_smoothness is 0.' };
+  return { warnings, inactiveFrom };
+}
+
+/** Tooltip HTML of a setting: its text, live details for the current values, then its range and default. */
+function settingTip(setting, values) {
+  const parts = [`<div>${tipMarkup(setting.tip)}</div>`];
+  const dyncam = setting.group === 'dyncam';
+  const prefix = dyncam ? 'cl_dyncam_' : 'cl_mouse_';
+  const followFactorName = dyncam ? 'cl_dyncam_follow_factor' : 'cl_mouse_followfactor';
+  const followFactorLabel = dyncam ? 'follow_factor' : 'followfactor';
+  const limits = setting.group === 'preview' ? null : cursorLimits(values, dyncam);
+
+  if (setting.name === prefix + 'max_distance' && limits.followFactor > 0) {
+    // CControls::GetMaxMouseDistance(): past this distance the camera offset would exceed CAMERA_MAX_DISTANCE
+    const limit = (CAMERA_MAX_DISTANCE * 100) / limits.followFactor + limits.deadzone;
+    const rounded = Math.round(limit);
+    const numerator = `${CAMERA_MAX_DISTANCE} × 100`;
+    const followColor = SETTINGS_BY_NAME[followFactorName].ringColor;
+    const deadzoneColor = SETTINGS_BY_NAME[prefix + 'deadzone'].ringColor;
+    parts.push(
+      '<div class="tip-note">Higher than the limit below does nothing.</div>',
+      `<div class="tip-formula">limit = ${fraction(numerator, followFactorLabel)} + deadzone</div>`,
+      `<div class="tip-formula">${coloredValue(rounded, setting.ringColor)} ${rounded === limit ? '=' : '≈'} ` +
+        `${fraction(numerator, coloredValue(limits.followFactor, followColor))} + ` +
+        `${coloredValue(limits.deadzone, deadzoneColor)}</div>`,
+    );
+  }
+  if (setting.name === prefix + 'deadzone' && limits.followFactor === 0) {
+    parts.push(`<div class="tip-note"><b>No effect</b>: ${followFactorLabel} is 0.</div>`);
+  }
+  if (setting.name === 'cl_dyncam_stabilizing' && values.cl_dyncam_smoothness === 0) {
+    parts.push('<div class="tip-note"><b>No effect</b>: smoothness is 0.</div>');
   }
 
-  return { messages, inactiveFrom };
+  parts.push(`<div class="tip-footer">Range ${setting.min}–${setting.max} · Default ${setting.defaultValue}</div>`);
+  return parts.join('');
 }
 
 /**
@@ -105,9 +123,9 @@ export class SettingsPanel {
       <div class="setting-message" hidden></div>`;
 
     if (setting.ringColor) row.querySelector('.setting-color').style.setProperty('--ring-color', `var(${setting.ringColor})`);
-    const note = setting.note ? ` ${setting.note}` : '';
-    row.querySelector('.info-button').dataset.tip =
-      `${setting.description}.${note} Range ${setting.min}–${setting.max}, default ${setting.defaultValue}.`;
+    const infoButton = row.querySelector('.info-button');
+    infoButton.classList.add('has-tip');
+    infoButton.tipContent = () => settingTip(setting, this.store.values);
 
     const container = setting.group + (setting.advanced ? '-more' : '');
     document.getElementById(`settings-${container}`).appendChild(row);
@@ -146,7 +164,7 @@ export class SettingsPanel {
   /** Shows the store's values, messages and active camera mode. */
   update() {
     const values = this.store.values;
-    const { messages, inactiveFrom } = describeSettings(values);
+    const { warnings, inactiveFrom } = describeSettings(values);
 
     for (const { setting, numberInput, slider, message } of this.rows) {
       const value = values[setting.name];
@@ -154,10 +172,9 @@ export class SettingsPanel {
       slider.value = Math.min(value, top);
       if (document.activeElement !== numberInput) numberInput.value = value;
 
-      const info = messages[setting.name];
-      message.hidden = !info;
-      message.textContent = info ? info.text : '';
-      message.classList.toggle('is-warning', Boolean(info?.warning));
+      const warning = warnings[setting.name];
+      message.hidden = !warning;
+      message.textContent = warning ?? '';
 
       const inactive = inactiveFrom[setting.name];
       if (inactive === undefined || inactive >= top) {

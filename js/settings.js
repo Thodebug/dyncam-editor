@@ -6,7 +6,7 @@
  * advanced    shown under "More settings"
  * sliderMax   end of the slider when the game range is much larger than useful values
  * ringColor   CSS variable of the circle drawn for this setting in the game view
- * note        extra text for the tooltip
+ * tip         tooltip text (**bold**, line breaks kept); settings-panel.js adds live details and the range
  */
 export const SETTINGS = [
   {
@@ -16,8 +16,7 @@ export const SETTINGS = [
     max: 2000,
     defaultValue: 1000,
     ringColor: '--ring-dyncam-max',
-    description: 'Maximum dynamic camera cursor distance',
-    note: 'Effective limit: 200 × 100 / cl_dyncam_follow_factor + cl_dyncam_deadzone.',
+    tip: 'How far your cursor can go from your tee.',
   },
   {
     name: 'cl_dyncam_deadzone',
@@ -26,7 +25,7 @@ export const SETTINGS = [
     max: 1300,
     defaultValue: 300,
     ringColor: '--ring-deadzone',
-    description: 'Deadzone for the dynamic camera to follow the cursor',
+    tip: 'Cursor distance at which the camera starts to follow.\nCloser than that, the camera stays on your tee.',
   },
   {
     name: 'cl_dyncam_follow_factor',
@@ -35,7 +34,7 @@ export const SETTINGS = [
     max: 200,
     defaultValue: 60,
     ringColor: '--ring-camera-offset',
-    description: 'Factor for the dynamic camera to follow the cursor',
+    tip: 'Share of the cursor movement past the deadzone that the camera follows, in %.\n100 = the camera moves as much as the cursor,\n0 = it stays on your tee.\nThe camera never moves more than **200**.',
   },
   {
     name: 'cl_dyncam_min_distance',
@@ -45,7 +44,7 @@ export const SETTINGS = [
     max: 2000,
     defaultValue: 0,
     ringColor: '--ring-dyncam-min',
-    description: 'Minimum dynamic camera cursor distance',
+    tip: 'Minimum cursor distance.\n0 = no minimum.',
   },
   {
     name: 'cl_dyncam_smoothness',
@@ -54,7 +53,7 @@ export const SETTINGS = [
     min: 0,
     max: 100,
     defaultValue: 0,
-    description: 'Transition amount of the camera movement, 0=instant, 100=slow and smooth',
+    tip: 'How smoothly the camera glides to its new position.\n0 = instant, 100 = slow and smooth.',
   },
   {
     name: 'cl_dyncam_stabilizing',
@@ -63,8 +62,7 @@ export const SETTINGS = [
     min: 0,
     max: 100,
     defaultValue: 0,
-    description: 'Amount of camera slowdown during fast cursor movement. High value can cause delay in camera movement',
-    note: 'Only with cl_dyncam_smoothness above 0.',
+    tip: 'Slows the camera during fast cursor moves.',
   },
   {
     name: 'cl_dyncam_mousesens',
@@ -74,8 +72,7 @@ export const SETTINGS = [
     max: 100000,
     sliderMax: 1000,
     defaultValue: 0,
-    description: 'Mouse sens used when dyncam is toggled on',
-    note: '0: inp_mousesens is used. Felt in the preview with Capture mouse.',
+    tip: 'Mouse sensitivity with cl_dyncam 1.\n0 = use inp_mousesens.\nFelt in the preview with **Capture mouse**.',
   },
   {
     name: 'cl_mouse_max_distance',
@@ -85,8 +82,7 @@ export const SETTINGS = [
     sliderMax: 2000,
     defaultValue: 400,
     ringColor: '--ring-mouse-max',
-    description: 'Maximum cursor distance',
-    note: 'With cl_mouse_followfactor above 0, same limit as the dyncam: 200 × 100 / cl_mouse_followfactor + cl_mouse_deadzone.',
+    tip: 'How far your cursor can go from your tee.',
   },
   {
     name: 'cl_mouse_min_distance',
@@ -97,7 +93,7 @@ export const SETTINGS = [
     sliderMax: 2000,
     defaultValue: 0,
     ringColor: '--ring-mouse-min',
-    description: 'Minimum cursor distance',
+    tip: 'Minimum cursor distance.\n0 = no minimum.',
   },
   {
     name: 'cl_mouse_deadzone',
@@ -108,7 +104,7 @@ export const SETTINGS = [
     sliderMax: 2000,
     defaultValue: 0,
     ringColor: '--ring-deadzone',
-    description: 'Deadzone for the camera to follow the cursor',
+    tip: 'Cursor distance at which the camera starts to follow.\nCloser than that, the camera stays on your tee.',
   },
   {
     name: 'cl_mouse_followfactor',
@@ -118,7 +114,7 @@ export const SETTINGS = [
     max: 200,
     defaultValue: 0,
     ringColor: '--ring-camera-offset',
-    description: 'Factor for the camera to follow the cursor',
+    tip: 'Share of the cursor movement past the deadzone that the camera follows, in %.\n100 = the camera moves as much as the cursor,\n0 = it stays on your tee.\nThe camera never moves more than **200**.',
   },
   {
     name: 'inp_mousesens',
@@ -127,8 +123,7 @@ export const SETTINGS = [
     max: 100000,
     sliderMax: 1000,
     defaultValue: 200,
-    description: 'Mouse sensitivity',
-    note: 'Your usual sensitivity. Only used by the preview with Capture mouse, not written in the commands.',
+    tip: 'Your usual mouse sensitivity.\nOnly for the preview with **Capture mouse**, not added to the commands.',
   },
 ];
 
