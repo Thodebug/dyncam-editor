@@ -136,7 +136,8 @@ textarea {
   gap: calc(10 * var(--u));
   padding: calc(8 * var(--u));
   background: var(--page);
-  border-radius: 0 calc(10 * var(--u)) calc(10 * var(--u)) calc(10 * var(--u));
+  /* Square top corners: the title tab sits on the left one, the GitHub tab on the right one */
+  border-radius: 0 0 calc(10 * var(--u)) calc(10 * var(--u));
 }
 
 .view {
