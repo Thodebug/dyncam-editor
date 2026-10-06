@@ -99,7 +99,7 @@ export class MapRenderer {
           if (!tiles.length || !texture) continue;
           target.layers.push({
             type: 'tiles',
-            buffer: graphics.createTileBuffer(tiles),
+            buffer: graphics.createTileBuffer(tiles, layer.height),
             texture,
             color: layer.color.map((channel) => channel / 255),
           });

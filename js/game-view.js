@@ -152,6 +152,7 @@ export class GameView {
       graphics.mapScreen(0, 0, width, height);
       this.drawHint(hint);
     }
+    graphics.flush();
 
     if (cameraMoving || this.player.isAnimating(now)) {
       this.requestRender();

@@ -71,12 +71,17 @@ const HAND_QUAD = centeredQuad(20, 20);
 const HOOK_QUAD = containerQuad(-12, -8, 24, 16);
 const SPLAT_QUAD = centeredQuad(24, 24);
 
+const WHITE = [1, 1, 1, 1];
+const QUAD_TRIANGLES = [0, 1, 2, 0, 2, 3];
+const FREEFORM_TRIANGLES = [0, 1, 3, 0, 3, 2];
+
 export class TeeRenderer {
   /** graphics: Graphics. skin: data/skins/default.png, game: data/game.png, particles: data/particles.png */
   constructor(graphics, { skin, game, particles }) {
     this.graphics = graphics;
     this.images = { skin, game, particles };
     this.vertices = new Float32Array(6 * PRIMITIVE_STRIDE);
+    this.corners = new Float32Array(16);
     this.laserOutline = packedHslToRgb(LASER_OUTLINE_COLOR);
     this.laserInner = packedHslToRgb(LASER_INNER_COLOR);
     this.upload();
@@ -133,45 +138,52 @@ export class TeeRenderer {
    * RenderQuadContainerEx(): `quad` turned by `rotation` around its center, scaled, then moved to (x, y),
    * with the color (RGBA from 0 to 1) stored as bytes like Graphics()->SetColor().
    */
-  drawQuad(texture, quad, x, y, { scaleX = 1, scaleY = 1, rotation = 0, color = [1, 1, 1, 1] } = {}) {
-    const corners = [
-      [quad.x, quad.y],
-      [quad.x + quad.width, quad.y],
-      [quad.x + quad.width, quad.y + quad.height],
-      [quad.x, quad.y + quad.height],
-    ];
+  drawQuad(texture, quad, x, y, { scaleX = 1, scaleY = 1, rotation = 0, color = WHITE } = {}) {
     const centerX = quad.x + quad.width / 2;
     const centerY = quad.y + quad.height / 2;
     const cos = Math.cos(rotation);
     const sin = Math.sin(rotation);
-    const points = corners.map(([cornerX, cornerY], corner) => {
-      let px = cornerX;
-      let py = cornerY;
+    const corners = this.corners;
+    for (let corner = 0; corner < 4; corner++) {
+      let px = corner === 1 || corner === 2 ? quad.x + quad.width : quad.x;
+      let py = corner >= 2 ? quad.y + quad.height : quad.y;
       if (rotation !== 0) {
         const dx = px - centerX;
         const dy = py - centerY;
         px = dx * cos - dy * sin + centerX;
         py = dx * sin + dy * cos + centerY;
       }
-      return [px * scaleX + x, py * scaleY + y, quad.subset[corner * 2], quad.subset[corner * 2 + 1]];
-    });
-    this.drawTriangles([points[0], points[1], points[2], points[0], points[2], points[3]], color, texture);
+      corners[corner * 4] = px * scaleX + x;
+      corners[corner * 4 + 1] = py * scaleY + y;
+      corners[corner * 4 + 2] = quad.subset[corner * 2];
+      corners[corner * 4 + 3] = quad.subset[corner * 2 + 1];
+    }
+    // Corners top left, top right, bottom right, bottom left: triangles (0, 1, 2) and (0, 2, 3)
+    this.drawCorners(QUAD_TRIANGLES, color, texture);
   }
 
   /** Untextured quad with corners p0, p1, p2, p3 (IGraphics::CFreeformItem): triangles (0, 1, 3) and (0, 3, 2). */
   drawFreeform(p0, p1, p2, p3, color) {
-    const point = (p) => [p.x, p.y, 0, 0];
-    this.drawTriangles([point(p0), point(p1), point(p3), point(p0), point(p3), point(p2)], color, null);
+    const corners = this.corners;
+    [p0, p1, p2, p3].forEach((point, corner) => {
+      corners[corner * 4] = point.x;
+      corners[corner * 4 + 1] = point.y;
+      corners[corner * 4 + 2] = 0;
+      corners[corner * 4 + 3] = 0;
+    });
+    this.drawCorners(FREEFORM_TRIANGLES, color, null);
   }
 
-  drawTriangles(points, color, texture) {
-    const rgba = color.map((channel) => colorByte(channel) / 255);
+  /** Two triangles from this.corners (x, y, u, v for each corner), in the order of `order`. */
+  drawCorners(order, color, texture) {
     const vertices = this.vertices;
-    points.forEach((p, i) => {
-      vertices.set(p, i * PRIMITIVE_STRIDE);
-      vertices.set(rgba, i * PRIMITIVE_STRIDE + 4);
+    const corners = this.corners;
+    order.forEach((corner, i) => {
+      const offset = i * PRIMITIVE_STRIDE;
+      for (let n = 0; n < 4; n++) vertices[offset + n] = corners[corner * 4 + n];
+      for (let n = 0; n < 4; n++) vertices[offset + 4 + n] = colorByte(color[n]) / 255;
     });
-    this.graphics.drawPrimitives(vertices, points.length, texture);
+    this.graphics.drawPrimitives(vertices, 6, texture);
   }
 
   /**

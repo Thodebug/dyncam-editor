@@ -101,6 +101,7 @@ export class Graphics {
       stencil: false,
       premultipliedAlpha: false,
       preserveDrawingBuffer: false,
+      powerPreference: 'high-performance',
     });
     if (!gl) throw new WebGLUnavailableError('WebGL 2 is not available');
     this.gl = gl;
@@ -137,6 +138,11 @@ export class Graphics {
     gl.vertexAttribPointer(2, 4, gl.FLOAT, false, stride, 16);
     gl.bindVertexArray(null);
     this.projection = new Float32Array(8);
+
+    // Primitives are queued and sent to the GPU in one upload when the state changes (flush()).
+    this.batch = new Float32Array(1024 * PRIMITIVE_STRIDE);
+    this.batchCount = 0;
+    this.batchDraws = [];
   }
 
   createProgram(vertexSource, fragmentSource) {
@@ -169,6 +175,7 @@ export class Graphics {
 
   /** 'normal': GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA. 'premultiplied': for textures uploaded premultiplied. */
   setBlend(mode) {
+    this.flush();
     const gl = this.gl;
     if (mode === 'premultiplied') gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     else gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -272,6 +279,7 @@ export class Graphics {
 
   /** IGraphics::MapScreen(): the world rectangle shown on the whole canvas, as the orthographic matrix of SetState(). */
   mapScreen(left, top, right, bottom) {
+    this.flush();
     const f = Math.fround;
     const p = this.projection;
     // Column-major mat4x2 (OpenGL receives the row-major matrix transposed)
@@ -302,30 +310,50 @@ export class Graphics {
 
   /**
    * Triangles from a Float32Array of vertices (PRIMITIVE_STRIDE floats each: x, y, u, v, r, g, b, a with colors 0..1),
-   * textured when `texture` is given.
+   * textured when `texture` is given. They are drawn in order at the next flush().
    */
   drawPrimitives(vertices, count, texture = null) {
+    const size = count * PRIMITIVE_STRIDE;
+    const start = this.batchCount * PRIMITIVE_STRIDE;
+    if (start + size > this.batch.length) {
+      const larger = new Float32Array(Math.max(this.batch.length * 2, start + size));
+      larger.set(this.batch.subarray(0, start));
+      this.batch = larger;
+    }
+    this.batch.set(vertices.subarray(0, size), start);
+    const last = this.batchDraws[this.batchDraws.length - 1];
+    if (last && last.texture === texture) last.count += count;
+    else this.batchDraws.push({ texture, first: this.batchCount, count });
+    this.batchCount += count;
+  }
+
+  /** Draws the queued primitives. */
+  flush() {
+    if (!this.batchCount) return;
     const gl = this.gl;
     const program = this.programs.primitive;
     this.useProgram(program);
-    gl.uniform1i(program.uniforms.gTextured, texture ? 1 : 0);
-    gl.uniform1f(program.uniforms.gLodBias, texture?.mipmaps ? LOD_BIAS : 0);
-    if (texture) {
-      this.bindTexture(gl.TEXTURE_2D, texture.texture);
-      gl.uniform1i(program.uniforms.gTextureSampler, 0);
-    }
+    gl.uniform1i(program.uniforms.gTextureSampler, 0);
     gl.bindVertexArray(this.primitiveArray);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.primitiveBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, vertices.subarray(0, count * PRIMITIVE_STRIDE), gl.STREAM_DRAW);
-    gl.drawArrays(gl.TRIANGLES, 0, count);
+    gl.bufferData(gl.ARRAY_BUFFER, this.batch.subarray(0, this.batchCount * PRIMITIVE_STRIDE), gl.STREAM_DRAW);
+    for (const draw of this.batchDraws) {
+      gl.uniform1i(program.uniforms.gTextured, draw.texture ? 1 : 0);
+      gl.uniform1f(program.uniforms.gLodBias, draw.texture?.mipmaps ? LOD_BIAS : 0);
+      if (draw.texture) this.bindTexture(gl.TEXTURE_2D, draw.texture.texture);
+      gl.drawArrays(gl.TRIANGLES, draw.first, draw.count);
+    }
     gl.bindVertexArray(null);
+    this.batchCount = 0;
+    this.batchDraws.length = 0;
   }
 
   /**
-   * Static tile layer buffers: `tiles` is [{ x, y, index, flags }] in tiles. Each tile is a quad of 32 units,
-   * with texture coordinates turned by the tile flags (FillTmpTile() in src/game/map/render_layer.cpp).
+   * Static tile layer buffers: `tiles` is [{ x, y, index, flags }] in tiles, row by row, for a layer `height` tiles high.
+   * Each tile is a quad of 32 units, with texture coordinates turned by the tile flags
+   * (FillTmpTile() in src/game/map/render_layer.cpp).
    */
-  createTileBuffer(tiles) {
+  createTileBuffer(tiles, height) {
     const gl = this.gl;
     const positions = new Float32Array(tiles.length * 8);
     const texcoords = new Uint8Array(tiles.length * 16);
@@ -342,6 +370,10 @@ export class Graphics {
       }
       indices.set([0, 1, 2, 0, 2, 3].map((index) => i * 4 + index), i * 6);
     });
+    // rowStarts[y]: number of tiles before row y
+    const rowStarts = new Uint32Array(height + 1);
+    for (const tile of tiles) rowStarts[tile.y + 1]++;
+    for (let y = 0; y < height; y++) rowStarts[y + 1] += rowStarts[y];
 
     const array = gl.createVertexArray();
     gl.bindVertexArray(array);
@@ -359,11 +391,21 @@ export class Graphics {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
-    return { array, count: indices.length };
+    return { array, rowStarts, height };
   }
 
-  /** CCommandProcessorFragment_OpenGL3_3::Cmd_RenderTileLayer() */
+  /**
+   * CCommandProcessorFragment_OpenGL3_3::Cmd_RenderTileLayer() for the rows the screen shows
+   * (CRenderLayerTile::RenderTileLayer()).
+   */
   drawTileLayer(buffer, texture, color) {
+    this.flush();
+    const { top, bottom } = this.screen;
+    const firstRow = Math.min(Math.max(Math.floor(top / 32), 0), buffer.height);
+    const endRow = Math.min(Math.max(Math.ceil(bottom / 32), 0), buffer.height);
+    const first = buffer.rowStarts[firstRow];
+    const count = buffer.rowStarts[endRow] - first;
+    if (count <= 0) return;
     const gl = this.gl;
     const program = this.programs.tile;
     this.useProgram(program);
@@ -371,7 +413,7 @@ export class Graphics {
     gl.uniform1i(program.uniforms.gTextureSampler, 0);
     gl.uniform4fv(program.uniforms.gVertColor, color);
     gl.bindVertexArray(buffer.array);
-    gl.drawElements(gl.TRIANGLES, buffer.count, gl.UNSIGNED_INT, 0);
+    gl.drawElements(gl.TRIANGLES, count * 6, gl.UNSIGNED_INT, first * 6 * 4);
     gl.bindVertexArray(null);
   }
 
@@ -420,6 +462,7 @@ export class Graphics {
 
   /** CCommandProcessorFragment_OpenGL3_3::Cmd_RenderQuadLayer() for quads without envelopes. */
   drawQuadLayer(buffer, texture) {
+    this.flush();
     const gl = this.gl;
     const program = this.programs.quad;
     this.useProgram(program);
