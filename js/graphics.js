@@ -82,6 +82,40 @@ void main() {
   FragClr = gTextured ? texture(gTextureSampler, TexCoord, ${LOD_BIAS.toFixed(1)}) * color : color;
 }`;
 
+/**
+ * Circle line of the editor's distance circles, drawn on a square around it: anti-aliased,
+ * solid or dashed. Dashes start at angle 0 and run clockwise, like CanvasRenderingContext2D.setLineDash().
+ */
+const VERTEX_RING = `#version 300 es
+layout (location = 0) in vec2 inVertex;
+uniform mat4x2 gPos;
+out vec2 Position;
+void main() {
+  gl_Position = vec4(gPos * vec4(inVertex, 0.0, 1.0), 0.0, 1.0);
+  Position = inVertex;
+}`;
+
+const FRAGMENT_RING = `#version 300 es
+precision highp float;
+uniform vec2 gCenter;
+uniform float gRadius;
+uniform float gWidth;
+uniform vec2 gDash;
+uniform vec4 gColor;
+in vec2 Position;
+out vec4 FragClr;
+void main() {
+  vec2 offset = Position - gCenter;
+  float coverage = clamp(gWidth * 0.5 - abs(length(offset) - gRadius) + 0.5, 0.0, 1.0);
+  if (gDash.x > 0.0) {
+    float angle = atan(offset.y, offset.x);
+    if (angle < 0.0) angle += 6.28318530718;
+    float along = mod(angle * gRadius, gDash.x + gDash.y);
+    coverage *= clamp(gDash.x - along + 0.5, 0.0, 1.0) * clamp(along + 0.5, 0.0, 1.0);
+  }
+  FragClr = vec4(gColor.rgb, gColor.a * coverage);
+}`;
+
 /** Floats per vertex of drawPrimitives(): x, y, u, v, r, g, b, a */
 export const PRIMITIVE_STRIDE = 8;
 
@@ -122,6 +156,7 @@ export class Graphics {
       primitive: this.createProgram(VERTEX_PRIMITIVE, FRAGMENT_PRIMITIVE),
       tile: this.createProgram(VERTEX_TILE, FRAGMENT_TILE),
       quad: this.createProgram(VERTEX_QUAD, FRAGMENT_QUAD),
+      ring: this.createProgram(VERTEX_RING, FRAGMENT_RING),
     };
 
     // Stream buffer for primitives drawn every frame
@@ -141,6 +176,7 @@ export class Graphics {
 
     // Primitives are queued and sent to the GPU in one upload when the state changes (flush()).
     this.batch = new Float32Array(1024 * PRIMITIVE_STRIDE);
+    this.ringVertices = new Float32Array(6 * PRIMITIVE_STRIDE);
     this.batchCount = 0;
     this.batchDraws = [];
   }
@@ -467,6 +503,34 @@ export class Graphics {
     gl.uniform4fv(program.uniforms.gVertColor, [1, 1, 1, 1]);
     gl.bindVertexArray(buffer.array);
     gl.drawElements(gl.TRIANGLES, buffer.count, gl.UNSIGNED_INT, 0);
+    gl.bindVertexArray(null);
+  }
+
+  /**
+   * A circle line centered on (x, y), in the units of the mapped screen: `width` thick, color RGBA from 0 to 1,
+   * dash [on, off] lengths along the circle, or null for a solid line.
+   */
+  drawRing(x, y, radius, width, color, dash = null) {
+    this.flush();
+    const gl = this.gl;
+    const program = this.programs.ring;
+    this.useProgram(program);
+    gl.uniform2f(program.uniforms.gCenter, x, y);
+    gl.uniform1f(program.uniforms.gRadius, radius);
+    gl.uniform1f(program.uniforms.gWidth, width);
+    gl.uniform2f(program.uniforms.gDash, dash ? dash[0] : 0, dash ? dash[1] : 0);
+    gl.uniform4fv(program.uniforms.gColor, color);
+
+    const extent = radius + width + 1;
+    const [left, top, right, bottom] = [x - extent, y - extent, x + extent, y + extent];
+    const square = this.ringVertices;
+    [left, top, right, top, right, bottom, left, top, right, bottom, left, bottom].forEach((value, i) => {
+      square[Math.floor(i / 2) * PRIMITIVE_STRIDE + (i % 2)] = value;
+    });
+    gl.bindVertexArray(this.primitiveArray);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.primitiveBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, square, gl.STREAM_DRAW);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
     gl.bindVertexArray(null);
   }
 }

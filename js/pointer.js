@@ -1,5 +1,8 @@
 import { clampMousePosition, cursorFromMouse, cursorLimits } from './camera.js';
 
+/** Scrolling, in pixels, that counts as one wheel notch. Browsers report about 100 per notch of a mouse wheel. */
+const WHEEL_NOTCH = 50;
+
 /**
  * Mouse input on the game view, with DDNet's default binds:
  * left button fires, right button hooks, the wheel switches between laser and hammer.
@@ -26,8 +29,10 @@ export class PointerInput {
     this.hookHeld = false;
     this.captureEnabled = false;
     this.captured = false;
+    /** Wheel movement not yet turned into a weapon switch, in pixels */
+    this.wheelDelta = 0;
 
-    canvas.addEventListener('pointermove', (event) => this.aimAt(event));
+    canvas.addEventListener('pointermove', (event) => this.onPointerMove(event));
     canvas.addEventListener('pointerdown', (event) => this.onPointerDown(event));
     canvas.addEventListener('pointerup', (event) => this.onPointerUp(event));
     canvas.addEventListener('lostpointercapture', () => this.releaseButtons());
@@ -86,29 +91,49 @@ export class PointerInput {
     }
     this.aimAt(event);
     if (event.pointerType === 'touch') return;
+    if (event.button !== 0 && event.button !== 2) return;
 
-    const now = performance.now();
-    if (event.button === 0) {
-      this.fireHeld = true;
-      this.player.pressFire(now, this.cursorPosition());
-    } else if (event.button === 2) {
-      this.hookHeld = true;
-      this.player.pressHook(now, this.cursorPosition());
-    } else {
-      return;
-    }
     try {
       this.canvas.setPointerCapture(event.pointerId);
     } catch {
       // The pointer may already be gone.
     }
     event.preventDefault();
-    this.onChange();
+    this.updateButtons(event.buttons);
+  }
+
+  onPointerMove(event) {
+    this.aimAt(event);
+    // The click that captures the mouse does not fire.
+    if (event.pointerType === 'touch' || (this.captureEnabled && !this.captured)) return;
+    this.updateButtons(event.buttons);
   }
 
   onPointerUp(event) {
-    if (event.button === 0) this.releaseFire();
-    if (event.button === 2) this.releaseHook();
+    this.updateButtons(event.buttons);
+  }
+
+  /**
+   * Fire (left button) and hook (right button) follow the buttons held, given as PointerEvent.buttons.
+   * A second button pressed or released while the other one is held only shows in pointermove events.
+   */
+  updateButtons(buttons) {
+    const fire = (buttons & 1) !== 0;
+    const hook = (buttons & 2) !== 0;
+    if (fire === this.fireHeld && hook === this.hookHeld) return;
+    const now = performance.now();
+    if (fire && !this.fireHeld) {
+      this.fireHeld = true;
+      this.player.pressFire(now, this.cursorPosition());
+    } else if (!fire) {
+      this.releaseFire();
+    }
+    if (hook && !this.hookHeld) {
+      this.hookHeld = true;
+      this.player.pressHook(now, this.cursorPosition());
+    } else if (!hook) {
+      this.releaseHook();
+    }
     this.onChange();
   }
 
@@ -130,9 +155,17 @@ export class PointerInput {
     this.onChange();
   }
 
+  /** One weapon switch per wheel notch: scrolling is added up and switches every WHEEL_NOTCH pixels. */
   onWheel(event) {
     event.preventDefault();
-    if (Math.abs(event.deltaY) < 1) return;
+    let pixelsPerUnit = 1;
+    if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) pixelsPerUnit = 33;
+    if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) pixelsPerUnit = 800;
+    // Changing direction starts again from zero
+    if (Math.sign(event.deltaY) !== Math.sign(this.wheelDelta)) this.wheelDelta = 0;
+    this.wheelDelta += event.deltaY * pixelsPerUnit;
+    if (Math.abs(this.wheelDelta) < WHEEL_NOTCH) return;
+    this.wheelDelta = 0;
     this.player.switchWeapon(performance.now());
     this.onChange();
   }

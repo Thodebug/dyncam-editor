@@ -1,4 +1,4 @@
-import { CAMERA_MAX_DISTANCE, CameraSmoothing, cameraOffsetAt, cursorFromMouse, cursorLimits } from './camera.js';
+import { CameraSmoothing, cameraOffsetAt, cursorFromMouse, cursorLimits } from './camera.js';
 import { PRIMITIVE_STRIDE } from './graphics.js';
 import { calcScreenParams, mapScreenToWorld } from './map-renderer.js';
 import { gameTick } from './player.js';
@@ -185,7 +185,11 @@ export class GameView {
     canvas.width = Math.max(1, Math.ceil(width));
     canvas.height = Math.max(1, Math.ceil(height));
     draw(canvas.getContext('2d'));
-    overlay = { canvas, texture: this.graphics.createTexture(canvas, { mipmaps: false, premultiplied: true }) };
+    overlay = {
+      width: canvas.width,
+      height: canvas.height,
+      texture: this.graphics.createTexture(canvas, { mipmaps: false, premultiplied: true }),
+    };
     cache.set(key, overlay);
     if (cache.size > OVERLAY_CACHE_SIZE) {
       const [oldestKey, oldest] = cache.entries().next().value;
@@ -199,8 +203,8 @@ export class GameView {
   drawOverlay(overlay, x, y) {
     const left = Math.round(x);
     const top = Math.round(y);
-    const right = left + overlay.canvas.width;
-    const bottom = top + overlay.canvas.height;
+    const right = left + overlay.width;
+    const bottom = top + overlay.height;
     const corners = [
       [left, top, 0, 0],
       [right, top, 1, 0],
@@ -215,6 +219,20 @@ export class GameView {
     this.graphics.setBlend('premultiplied');
     this.graphics.drawPrimitives(vertices, 6, overlay.texture);
     this.graphics.setBlend('normal');
+  }
+
+  /** A CSS color as RGB channels from 0 to 1. */
+  rgbOf(color) {
+    this.rgbCache ??= new Map();
+    let rgb = this.rgbCache.get(color);
+    if (!rgb) {
+      const context = document.createElement('canvas').getContext('2d', { willReadFrequently: true });
+      context.fillStyle = color;
+      context.fillRect(0, 0, 1, 1);
+      rgb = [...context.getImageData(0, 0, 1, 1).data.slice(0, 3)].map((channel) => channel / 255);
+      this.rgbCache.set(color, rgb);
+    }
+    return rgb;
   }
 
   drawHint(text) {
@@ -309,7 +327,7 @@ export class GameView {
   /**
    * Draws the circles centered on the tee. Labels go above a circle, or below when there is no room,
    * and are skipped when they would overlap another label.
-   * The circles and the labels are drawn on canvases that are reused while they do not change.
+   * The circles are drawn with WebGL; each label is a small canvas, reused while it does not change.
    */
   drawRings(limits, center, onlySetting) {
     let rings = this.rings(limits);
@@ -335,36 +353,14 @@ export class GameView {
       });
 
     const scale = this.scale;
-    // The circles canvas covers the view wherever the camera goes: the tee is at most CAMERA_MAX_DISTANCE from the center.
-    const margin = Math.ceil(CAMERA_MAX_DISTANCE * scale + 8 * ratio);
-    const circlesWidth = this.canvas.width + margin * 2;
-    const circlesHeight = this.canvas.height + margin * 2;
-    const middleX = circlesWidth / 2;
-    const middleY = circlesHeight / 2;
-    const circlesKey = JSON.stringify([
-      rings.map((ring) => [ring.radius, ring.faint, ring.dotted, ring.color]),
-      circlesWidth,
-      circlesHeight,
-      scale,
-      ratio,
-    ]);
-    const circles = this.overlay('circles', circlesKey, circlesWidth, circlesHeight, (context) => {
-      for (const ring of rings) {
-        context.save();
-        context.globalAlpha = ring.faint ? 0.6 : 1;
-        context.setLineDash(ring.dotted ? [2 * ratio, 5 * ratio] : ring.faint ? [7 * ratio, 6 * ratio] : []);
-        context.beginPath();
-        context.arc(middleX, middleY, ring.radius * scale, 0, Math.PI * 2);
-        context.lineWidth = (ring.faint ? 3 : 4.2) * ratio;
-        context.strokeStyle = 'rgba(0, 0, 0, 0.45)';
-        context.stroke();
-        context.lineWidth = (ring.faint ? 1.5 : 2.2) * ratio;
-        context.strokeStyle = ring.color;
-        context.stroke();
-        context.restore();
-      }
-    });
-    this.drawOverlay(circles, center.x - middleX, center.y - middleY);
+    for (const ring of rings) {
+      const alpha = ring.faint ? 0.6 : 1;
+      const dash = ring.dotted ? [2 * ratio, 5 * ratio] : ring.faint ? [7 * ratio, 6 * ratio] : null;
+      const radius = ring.radius * scale;
+      const [red, green, blue] = this.rgbOf(ring.color);
+      this.graphics.drawRing(center.x, center.y, radius, (ring.faint ? 3 : 4.2) * ratio, [0, 0, 0, 0.45 * alpha], dash);
+      this.graphics.drawRing(center.x, center.y, radius, (ring.faint ? 1.5 : 2.2) * ratio, [red, green, blue, alpha], dash);
+    }
 
     // Each label is its own small canvas, so a label moving to the other side of its circle redraws only that label.
     for (const { ring, side } of labelled) {

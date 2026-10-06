@@ -67,8 +67,9 @@ export class ConfigStore {
 
   /** Sets every setting like a config file does: listed values are used, the others get their default. */
   replaceValues(values) {
+    const source = values && typeof values === 'object' ? values : {};
     for (const setting of SETTINGS) {
-      const value = setting.name in values ? values[setting.name] : setting.defaultValue;
+      const value = Object.hasOwn(source, setting.name) ? Number(source[setting.name]) : setting.defaultValue;
       this.values[setting.name] = clampToRange(setting, value);
     }
   }
@@ -114,23 +115,24 @@ export class ConfigStore {
   }
 
   /**
-   * Reads console lines or a settings_ddnet.cfg file. Settings missing from the text get their default,
+   * Reads console lines or a settings_ddnet.cfg file. Camera settings missing from the text get their default,
    * like the game does, and the result becomes the baseline for "changed" values.
-   * Returns the number of values found.
+   * inp_mousesens is only changed when the text has it.
+   * Returns the number of settings found.
    */
   loadConfigText(text) {
     const found = {};
-    let count = 0;
     const pattern = /\b(cl_dyncam|cl_(?:dyncam|mouse)_[a-z_]+|inp_mousesens)\s+"?(-?\d+)"?/g;
     for (const [, name, value] of text.matchAll(pattern)) {
       if (name !== 'cl_dyncam' && !(name in SETTINGS_BY_NAME)) continue;
       found[name] = Number(value);
-      count++;
     }
+    const count = Object.keys(found).length;
     if (count === 0) return 0;
 
-    this.replaceValues(found);
-    this.dyncam = Boolean(found.cl_dyncam);
+    this.replaceValues({ inp_mousesens: this.values.inp_mousesens, ...found });
+    // cl_dyncam is a 0–1 setting: the game clamps other values into that range.
+    this.dyncam = (found.cl_dyncam ?? DEFAULT_DYNCAM) >= 1;
     this.baseline = { ...this.values, cl_dyncam: this.dyncam ? 1 : 0 };
     this.notify();
     return count;
@@ -183,7 +185,7 @@ export class ConfigStore {
     }
   }
 
-  /** Restores the last saved state. Returns false if there is none. */
+  /** Restores the last saved state. Returns false if there is none. Values of the wrong type are ignored. */
   restore() {
     let data;
     try {
@@ -193,14 +195,14 @@ export class ConfigStore {
     }
     if (!data || typeof data !== 'object') return false;
 
-    if (data.values) this.replaceValues(data.values);
+    if (data.values && typeof data.values === 'object') this.replaceValues(data.values);
     if (typeof data.dyncam === 'boolean') this.dyncam = data.dyncam;
     if (typeof data.changesOnlyChoice === 'boolean') {
       this.changesOnly = data.changesOnlyChoice;
       this.changesOnlyChoice = data.changesOnlyChoice;
     }
     if (typeof data.screenFormat === 'string') this.screenFormat = data.screenFormat;
-    if (data.baseline) {
+    if (data.baseline && typeof data.baseline === 'object') {
       const baseline = ConfigStore.defaultBaseline();
       for (const name of Object.keys(baseline)) {
         if (Number.isFinite(data.baseline[name])) baseline[name] = data.baseline[name];

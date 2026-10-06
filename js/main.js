@@ -163,10 +163,10 @@ async function start() {
   // Game view
   const loadingScreen = new LoadingScreen(byId('loading'));
   const canvas = byId('game-canvas');
-  let map;
-  let mapImages;
-  let spriteImages;
   let graphics;
+  let mapRenderer;
+  let teeRenderer;
+  let collision;
   const steps = 3;
   try {
     const mapImageUrls = Object.fromEntries(MAP_IMAGES.map((name) => [name, `assets/mapres/${name}.png`]));
@@ -179,7 +179,7 @@ async function start() {
     loadingScreen.showPreparing(0, steps);
     const decode = async (keys) =>
       Object.fromEntries(await Promise.all(keys.map(async (key) => [key, await imageFromBlob(files[key])])));
-    [map, mapImages, spriteImages] = await Promise.all([
+    const [map, mapImages, spriteImages] = await Promise.all([
       files.map.arrayBuffer().then(readMap),
       decode(MAP_IMAGES),
       decode(Object.keys(SPRITE_IMAGES)),
@@ -187,6 +187,17 @@ async function start() {
     loadingScreen.showPreparing(1, steps);
     await nextFrame();
     graphics = new Graphics(canvas);
+
+    mapRenderer = new MapRenderer(graphics, map, mapImages);
+    loadingScreen.showPreparing(2, steps);
+    await nextFrame();
+    teeRenderer = new TeeRenderer(graphics, spriteImages);
+    loadingScreen.showPreparing(3, steps);
+
+    const layers = map.groups.flatMap((group) => group.layers);
+    const gameLayer = layers.find((layer) => layer.type === 'tiles' && layer.game);
+    if (!gameLayer) throw new Error('The map has no game layer');
+    collision = CollisionMap.fromGameLayer(gameLayer);
   } catch (error) {
     if (error instanceof WebGLUnavailableError) {
       loadingScreen.showError(
@@ -199,14 +210,7 @@ async function start() {
     throw error;
   }
 
-  const mapRenderer = new MapRenderer(graphics, map, mapImages);
-  loadingScreen.showPreparing(2, steps);
-  await nextFrame();
-  const teeRenderer = new TeeRenderer(graphics, spriteImages);
-  loadingScreen.showPreparing(3, steps);
-
-  const gameLayer = map.groups.flatMap((group) => group.layers).find((layer) => layer.type === 'tiles' && layer.game);
-  const player = new Player(CollisionMap.fromGameLayer(gameLayer), TEE_POSITION);
+  const player = new Player(collision, TEE_POSITION);
   const pointer = new PointerInput({
     canvas,
     stage,
