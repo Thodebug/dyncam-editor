@@ -640,10 +640,6 @@ h2 .checkbox-button {
   font-size: calc(16 * var(--u));
 }
 
-.block-title .info-button {
-  font-size: calc(11 * var(--u));
-}
-
 /* The block of the camera mode shown in the game view is highlighted; the other one can be clicked */
 .mode-block {
   transition: background-color 0.15s, box-shadow 0.15s;
