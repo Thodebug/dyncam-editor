@@ -1,4 +1,4 @@
-import { CameraSmoothing, cameraOffsetAt, cursorFromMouse, cursorLimits } from './camera.js';
+import { CAMERA_MAX_DISTANCE, CameraSmoothing, cameraOffsetAt, cursorFromMouse, cursorLimits } from './camera.js';
 import { PRIMITIVE_STRIDE } from './graphics.js';
 import { calcScreenParams, mapScreenToWorld } from './map-renderer.js';
 import { gameTick } from './player.js';
@@ -16,6 +16,9 @@ export const SCREEN_FORMATS = [
   { id: '21:9', label: '21:9 (2560×1080)', aspect: 2560 / 1080 },
   { id: '21:9-wide', label: '21:9 (3440×1440)', aspect: 3440 / 1440 },
 ];
+
+/** Number of drawings over the game kept as textures for each kind (circles, labels, help text). */
+const OVERLAY_CACHE_SIZE = 16;
 
 /** The tee stands on the ctf5 platform at tile (162, 55). */
 export const TEE_POSITION = { x: 5200, y: 1777 };
@@ -166,24 +169,29 @@ export class GameView {
   /* ---------- Drawings over the game ---------- */
 
   /**
-   * A 2D canvas of `width` × `height` pixels shown as a texture, drawn by draw(context) again only when `key` changes.
+   * A 2D canvas of `width` × `height` pixels shown as a texture, drawn by draw(context).
+   * The last few canvases of each `name` are kept by `key`, so going back to one of them costs nothing.
    */
   overlay(name, key, width, height, draw) {
-    let overlay = this.overlays[name];
-    if (overlay?.key === key) return overlay;
-    const canvas = overlay?.canvas ?? document.createElement('canvas');
+    const cache = (this.overlays[name] ??= new Map());
+    let overlay = cache.get(key);
+    if (overlay) {
+      // Most recently used last
+      cache.delete(key);
+      cache.set(key, overlay);
+      return overlay;
+    }
+    const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.ceil(width));
     canvas.height = Math.max(1, Math.ceil(height));
-    const context = canvas.getContext('2d');
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    draw(context);
-    if (overlay) {
-      this.graphics.updateTexture(overlay.texture, canvas, { premultiplied: true });
-    } else {
-      overlay = { canvas, texture: this.graphics.createTexture(canvas, { mipmaps: false, premultiplied: true }) };
-      this.overlays[name] = overlay;
+    draw(canvas.getContext('2d'));
+    overlay = { canvas, texture: this.graphics.createTexture(canvas, { mipmaps: false, premultiplied: true }) };
+    cache.set(key, overlay);
+    if (cache.size > OVERLAY_CACHE_SIZE) {
+      const [oldestKey, oldest] = cache.entries().next().value;
+      this.graphics.deleteTexture(oldest.texture);
+      cache.delete(oldestKey);
     }
-    overlay.key = key;
     return overlay;
   }
 
@@ -301,7 +309,7 @@ export class GameView {
   /**
    * Draws the circles centered on the tee. Labels go above a circle, or below when there is no room,
    * and are skipped when they would overlap another label.
-   * The circles are drawn on a canvas that is reused while nothing changes.
+   * The circles and the labels are drawn on canvases that are reused while they do not change.
    */
   drawRings(limits, center, onlySetting) {
     let rings = this.rings(limits);
@@ -326,21 +334,27 @@ export class GameView {
         return { ring, side };
       });
 
-    const key = JSON.stringify([
-      labelled.map(({ ring, side }) => [ring.radius, ring.label, side, ring.faint, ring.dotted, ring.color]),
-      this.scale,
+    const scale = this.scale;
+    // The circles canvas covers the view wherever the camera goes: the tee is at most CAMERA_MAX_DISTANCE from the center.
+    const margin = Math.ceil(CAMERA_MAX_DISTANCE * scale + 8 * ratio);
+    const circlesWidth = this.canvas.width + margin * 2;
+    const circlesHeight = this.canvas.height + margin * 2;
+    const middleX = circlesWidth / 2;
+    const middleY = circlesHeight / 2;
+    const circlesKey = JSON.stringify([
+      rings.map((ring) => [ring.radius, ring.faint, ring.dotted, ring.color]),
+      circlesWidth,
+      circlesHeight,
+      scale,
       ratio,
-      this.font,
     ]);
-    const size = Math.ceil((Math.max(...rings.map((ring) => ring.radius)) * this.scale + 30 * ratio) * 2);
-    const middle = size / 2;
-    const overlay = this.overlay('rings', key, size, size, (context) => {
+    const circles = this.overlay('circles', circlesKey, circlesWidth, circlesHeight, (context) => {
       for (const ring of rings) {
         context.save();
         context.globalAlpha = ring.faint ? 0.6 : 1;
         context.setLineDash(ring.dotted ? [2 * ratio, 5 * ratio] : ring.faint ? [7 * ratio, 6 * ratio] : []);
         context.beginPath();
-        context.arc(middle, middle, ring.radius * this.scale, 0, Math.PI * 2);
+        context.arc(middleX, middleY, ring.radius * scale, 0, Math.PI * 2);
         context.lineWidth = (ring.faint ? 3 : 4.2) * ratio;
         context.strokeStyle = 'rgba(0, 0, 0, 0.45)';
         context.stroke();
@@ -349,17 +363,35 @@ export class GameView {
         context.stroke();
         context.restore();
       }
-
-      context.font = `${11.5 * ratio}px ${this.font}`;
-      for (const { ring, side } of labelled) {
-        if (!side) continue;
-        context.save();
-        context.globalAlpha = ring.faint ? 0.8 : 1;
-        this.drawArcLabel(context, ring.label, middle, ring.radius * this.scale + 4 * ratio, ring.color, side === 'top');
-        context.restore();
-      }
     });
-    this.drawOverlay(overlay, center.x - middle, center.y - middle);
+    this.drawOverlay(circles, center.x - middleX, center.y - middleY);
+
+    // Each label is its own small canvas, so a label moving to the other side of its circle redraws only that label.
+    for (const { ring, side } of labelled) {
+      if (!side) continue;
+      const radius = ring.radius * scale + 4 * ratio;
+      const onTop = side === 'top';
+      const font = `${11.5 * ratio}px ${this.font}`;
+      this.measureContext ??= document.createElement('canvas').getContext('2d');
+      this.measureContext.font = font;
+      const totalAngle = this.measureContext.measureText(ring.label).width / radius;
+      if (totalAngle > Math.PI * 1.6) continue;
+      // Box around the text: the arc it covers, plus the text height
+      const textHeight = 16 * ratio;
+      const halfAngle = Math.min(totalAngle / 2 + 0.05, Math.PI);
+      const halfWidth = Math.ceil((halfAngle >= Math.PI / 2 ? radius : radius * Math.sin(halfAngle)) + textHeight);
+      const depth = Math.ceil(radius * (1 - Math.cos(halfAngle)) + textHeight * 2);
+      const key = JSON.stringify([ring.label, ring.color, ring.faint, side, radius, ratio, this.font]);
+      const label = this.overlay('labels', key, halfWidth * 2, depth, (context) => {
+        // Canvas origin: the circle center at (halfWidth, radius + textHeight) on top, (halfWidth, depth - radius - textHeight) below
+        context.translate(halfWidth, onTop ? radius + textHeight : depth - radius - textHeight);
+        context.font = font;
+        context.globalAlpha = ring.faint ? 0.8 : 1;
+        this.drawArcLabel(context, ring.label, 0, radius, ring.color, onTop);
+      });
+      const top = onTop ? center.y - radius - textHeight : center.y + radius + textHeight - depth;
+      this.drawOverlay(label, center.x - halfWidth, top);
+    }
 
     // Cross at the screen center: where the camera looks
     if (!onlySetting) {

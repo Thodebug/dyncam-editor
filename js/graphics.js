@@ -224,15 +224,8 @@ export class Graphics {
     return { texture, width: pixels.width, height: pixels.height, mipmaps };
   }
 
-  /** Replaces the pixels of a texture made by createTexture() without mipmaps. */
-  updateTexture(target, source, { premultiplied = false } = {}) {
-    const gl = this.gl;
-    gl.bindTexture(gl.TEXTURE_2D, target.texture);
-    if (premultiplied) gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, source);
-    if (premultiplied) gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-    target.width = source.width;
-    target.height = source.height;
+  deleteTexture(texture) {
+    this.gl.deleteTexture(texture.texture);
   }
 
   /** The tileset of a tile layer as a 2D array texture of 256 tiles (Texture2DTo3D()), with mipmaps. */

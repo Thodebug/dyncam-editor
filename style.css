@@ -215,6 +215,13 @@ textarea {
   font-size: calc(12 * var(--u));
 }
 
+.version {
+  align-self: flex-end;
+  margin-bottom: calc(5 * var(--u));
+  font-size: calc(9 * var(--u));
+  opacity: 0.45;
+}
+
 .tab-group {
   display: flex;
   height: 100%;
