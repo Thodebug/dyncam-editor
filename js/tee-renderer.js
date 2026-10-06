@@ -13,9 +13,6 @@ const WEAPONS = {
   laser: { sprite: [2, 12, 7, 3], cursor: [0, 12, 2, 2], visualSize: 92, offsetX: 24, offsetY: -2 },
 };
 
-/** Angle of the hammer at the end of its swing (ANIM_HAMMER_SWING). */
-const HAMMER_REST_ANGLE = -0.1;
-
 const CURSOR_SIZE = 64;
 const HAND_SIZE = 20;
 const HOOK_SIZE = { width: 24, height: 16 };
@@ -131,8 +128,11 @@ export class TeeRenderer {
     context.restore();
   }
 
-  /** Tee standing still at `position`, aiming along `direction` (unit vector), holding `weaponName`. */
-  drawPlayer(context, view, position, direction, weaponName) {
+  /**
+   * Tee standing still at `position`, aiming along `direction` (unit vector), holding `weaponName`.
+   * pose: { recoil, hammerAngle, blinking } from Player.pose().
+   */
+  drawPlayer(context, view, position, direction, weaponName, pose) {
     const weapon = this.weapons[weaponName];
     const aimAngle = Math.atan2(direction.y, direction.x);
     const facingLeft = direction.x < 0;
@@ -141,12 +141,13 @@ export class TeeRenderer {
     if (weaponName === 'hammer') {
       const x = facingLeft ? position.x - weapon.offsetX : position.x;
       const y = position.y + weapon.offsetY;
-      const swing = HAMMER_REST_ANGLE * Math.PI * 2;
+      const swing = pose.hammerAngle * Math.PI * 2;
       const rotation = facingLeft ? -Math.PI / 2 - swing : -Math.PI / 2 + swing;
       this.drawSprite(context, view, weapon.image, x, y, weapon.width, weapon.height, rotation, false, facingLeft);
     } else {
-      const x = position.x + direction.x * weapon.offsetX;
-      const y = position.y + direction.y * weapon.offsetX + weapon.offsetY;
+      const reach = weapon.offsetX - pose.recoil * 10;
+      const x = position.x + direction.x * reach;
+      const y = position.y + direction.y * reach + weapon.offsetY;
       this.drawSprite(context, view, weapon.image, x, y, weapon.width, weapon.height, aimAngle, false, facingLeft);
     }
 
@@ -161,31 +162,36 @@ export class TeeRenderer {
       this.drawSprite(context, view, outline ? this.bodyOutline : this.body, body.x, body.y, size, size);
       if (!outline) {
         const eyeSize = size * 0.4;
+        const eyeHeight = pose.blinking ? size * 0.15 : eyeSize;
         const eyeSeparation = (0.075 - 0.01 * Math.abs(direction.x)) * size;
         const eyeX = body.x + direction.x * 0.125 * size;
         const eyeY = body.y + (-0.05 + direction.y * 0.1) * size;
-        this.drawSprite(context, view, this.eye, eyeX - eyeSeparation, eyeY, eyeSize, eyeSize);
-        this.drawSprite(context, view, this.eye, eyeX + eyeSeparation, eyeY, eyeSize, eyeSize, 0, true);
+        this.drawSprite(context, view, this.eye, eyeX - eyeSeparation, eyeY, eyeSize, eyeHeight);
+        this.drawSprite(context, view, this.eye, eyeX + eyeSeparation, eyeY, eyeSize, eyeHeight, 0, true);
       }
       this.drawSprite(context, view, foot, frontFoot.x, frontFoot.y, size, size / 2);
     }
   }
 
-  /** CPlayers::RenderHook: the hook fully extended to `length` units, the chain, then the hand. */
-  drawHook(context, view, position, direction, length) {
-    const headX = position.x + direction.x * length;
-    const headY = position.y + direction.y * length;
-    const rotation = Math.atan2(direction.y, direction.x);
-    this.drawSprite(context, view, this.hookHead, headX, headY, HOOK_SIZE.width, HOOK_SIZE.height, rotation);
-    for (let distance = 24; distance < length; distance += 24) {
-      const x = headX - direction.x * distance;
-      const y = headY - direction.y * distance;
+  /** CPlayers::RenderHook(): hook head at `hookPosition`, chain links every 24 units back to the tee, then the hand. */
+  drawHook(context, view, position, hookPosition) {
+    const distance = Math.hypot(position.x - hookPosition.x, position.y - hookPosition.y);
+    if (distance === 0) return;
+    const back = { x: (position.x - hookPosition.x) / distance, y: (position.y - hookPosition.y) / distance };
+    const rotation = Math.atan2(back.y, back.x) + Math.PI;
+    this.drawSprite(context, view, this.hookHead, hookPosition.x, hookPosition.y, HOOK_SIZE.width, HOOK_SIZE.height, rotation);
+    for (let step = 24; step < distance; step += 24) {
+      const x = hookPosition.x + back.x * step;
+      const y = hookPosition.y + back.y * step;
       this.drawSprite(context, view, this.hookChain, x, y, HOOK_SIZE.width, HOOK_SIZE.height, rotation);
     }
 
-    const handRotation = direction.x < 0 ? rotation + Math.PI / 2 : rotation - Math.PI / 2;
-    const handX = position.x + direction.x + direction.x * 20;
-    const handY = position.y + direction.y + direction.y * 20;
+    // RenderHand(): angle offset −π/2, then 20 units along the hook direction
+    const toward = { x: -back.x, y: -back.y };
+    const aim = Math.atan2(toward.y, toward.x);
+    const handRotation = toward.x < 0 ? aim + Math.PI / 2 : aim - Math.PI / 2;
+    const handX = position.x + toward.x + toward.x * 20;
+    const handY = position.y + toward.y + toward.y * 20;
     this.drawSprite(context, view, this.handOutline, handX, handY, HAND_SIZE, HAND_SIZE, handRotation);
     this.drawSprite(context, view, this.hand, handX, handY, HAND_SIZE, HAND_SIZE, handRotation);
   }

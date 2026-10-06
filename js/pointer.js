@@ -1,5 +1,4 @@
 import { clampMousePosition, cursorFromMouse, cursorLimits } from './camera.js';
-import { SCREEN_HEIGHT, SCREEN_WIDTH } from './game-view.js';
 
 /**
  * Mouse input on the game view, with DDNet's default binds:
@@ -12,16 +11,17 @@ import { SCREEN_HEIGHT, SCREEN_WIDTH } from './game-view.js';
  *   (CControls::OnCursorMove).
  */
 export class PointerInput {
-  constructor({ canvas, stage, store, laserGun, onChange }) {
+  /** getScreen() returns the visible world size at zoom 1: { width, height }. */
+  constructor({ canvas, stage, store, player, getScreen, onChange }) {
     this.canvas = canvas;
     this.stage = stage;
     this.store = store;
-    this.laserGun = laserGun;
+    this.player = player;
+    this.getScreen = getScreen;
     this.onChange = onChange;
 
     /** Mouse position relative to the tee in units, or null before the first move. */
     this.mouse = null;
-    this.weapon = 'laser';
     this.fireHeld = false;
     this.hookHeld = false;
     this.captureEnabled = false;
@@ -41,6 +41,10 @@ export class PointerInput {
     return cursorLimits(this.store.values, this.store.dyncam);
   }
 
+  cursorPosition() {
+    return cursorFromMouse(this.mouse, this.limits()).position;
+  }
+
   /** Text shown over the game view, or '' for none. */
   hint() {
     if (this.captureEnabled && !this.captured) return 'Click to capture the mouse · Esc to release';
@@ -54,17 +58,24 @@ export class PointerInput {
     this.onChange();
   }
 
+  /** Sets the mouse position and tells the player its aim may have changed. */
+  setMouse(mouse) {
+    this.mouse = mouse;
+    this.player.aimAt(performance.now(), this.cursorPosition());
+    this.onChange();
+  }
+
   /** Hover aiming: the offset from the screen center, in units at zoom 1. */
   aimAt(event) {
     if (this.captured) return;
     const box = this.canvas.getBoundingClientRect();
-    const unitsPerPixel = SCREEN_WIDTH / box.width;
-    const gain = Math.max(1, this.limits().effectiveMax / ((0.95 * SCREEN_HEIGHT) / 2));
-    this.mouse = {
+    const screen = this.getScreen();
+    const unitsPerPixel = screen.width / box.width;
+    const gain = Math.max(1, this.limits().effectiveMax / ((0.95 * screen.height) / 2));
+    this.setMouse({
       x: (event.clientX - box.left - box.width / 2) * unitsPerPixel * gain,
       y: (event.clientY - box.top - box.height / 2) * unitsPerPixel * gain,
-    };
-    this.onChange();
+    });
   }
 
   onPointerDown(event) {
@@ -76,13 +87,13 @@ export class PointerInput {
     this.aimAt(event);
     if (event.pointerType === 'touch') return;
 
+    const now = performance.now();
     if (event.button === 0) {
       this.fireHeld = true;
-      this.updateTrigger();
-      // Fire now: a short click can end before the next frame.
-      this.laserGun.update(performance.now(), this.cursorPosition());
+      this.player.pressFire(now, this.cursorPosition());
     } else if (event.button === 2) {
       this.hookHeld = true;
+      this.player.pressHook(now, this.cursorPosition());
     } else {
       return;
     }
@@ -96,34 +107,34 @@ export class PointerInput {
   }
 
   onPointerUp(event) {
-    if (event.button === 0) this.fireHeld = false;
-    if (event.button === 2) this.hookHeld = false;
-    this.updateTrigger();
+    if (event.button === 0) this.releaseFire();
+    if (event.button === 2) this.releaseHook();
     this.onChange();
   }
 
-  releaseButtons() {
+  releaseFire() {
+    if (!this.fireHeld) return;
     this.fireHeld = false;
+    this.player.releaseFire(performance.now());
+  }
+
+  releaseHook() {
+    if (!this.hookHeld) return;
     this.hookHeld = false;
-    this.updateTrigger();
+    this.player.releaseHook(performance.now());
+  }
+
+  releaseButtons() {
+    this.releaseFire();
+    this.releaseHook();
     this.onChange();
   }
 
   onWheel(event) {
     event.preventDefault();
     if (Math.abs(event.deltaY) < 1) return;
-    this.weapon = this.weapon === 'laser' ? 'hammer' : 'laser';
-    this.updateTrigger();
+    this.player.switchWeapon(performance.now());
     this.onChange();
-  }
-
-  /** The laser fires only while the laser is the active weapon. */
-  updateTrigger() {
-    this.laserGun.triggerHeld = this.fireHeld && this.weapon === 'laser';
-  }
-
-  cursorPosition() {
-    return cursorFromMouse(this.mouse, this.limits()).position;
   }
 
   /* ---------- Captured mouse ---------- */
@@ -149,11 +160,7 @@ export class PointerInput {
   onPointerLockChange() {
     this.captured = document.pointerLockElement === this.canvas;
     this.stage.classList.toggle('is-mouse-captured', this.captured);
-    if (!this.captured) {
-      this.fireHeld = false;
-      this.hookHeld = false;
-      this.updateTrigger();
-    }
+    if (!this.captured) this.releaseButtons();
     this.onChange();
   }
 
@@ -164,10 +171,11 @@ export class PointerInput {
     const sensitivity = this.store.dyncam && values.cl_dyncam_mousesens ? values.cl_dyncam_mousesens : values.inp_mousesens;
     const limits = this.limits();
     const mouse = this.mouse ?? { x: limits.effectiveMax, y: 0 };
-    this.mouse = clampMousePosition(
-      { x: mouse.x + (event.movementX * sensitivity) / 100, y: mouse.y + (event.movementY * sensitivity) / 100 },
-      limits,
+    this.setMouse(
+      clampMousePosition(
+        { x: mouse.x + (event.movementX * sensitivity) / 100, y: mouse.y + (event.movementY * sensitivity) / 100 },
+        limits,
+      ),
     );
-    this.onChange();
   }
 }

@@ -34,9 +34,15 @@ export function setupTooltips(tooltip) {
     showTimer = setTimeout(() => show(element, event.clientX), SHOW_DELAY_MS);
   });
 
+  document.addEventListener('pointerdown', () => {
+    clearTimeout(showTimer);
+    hide();
+  });
+
+  // Keyboard focus shows the tooltip; a mouse click does not.
   document.addEventListener('focusin', (event) => {
     const element = event.target.closest?.('[data-tip]');
-    if (element) show(element);
+    if (element && event.target.matches(':focus-visible')) show(element);
     else hide();
   });
 }

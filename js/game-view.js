@@ -1,20 +1,45 @@
 import { CameraSmoothing, cameraOffsetAt, cursorFromMouse, cursorLimits } from './camera.js';
-import { TICK_MS } from './laser.js';
+import { gameTick } from './player.js';
 
-/** Visible world size at zoom 1 on a 16:9 screen (CRenderTools::CalcScreenParams). */
-export const SCREEN_WIDTH = 1429.84;
-export const SCREEN_HEIGHT = (SCREEN_WIDTH * 9) / 16;
+/**
+ * Visible world size at zoom 1 for a screen aspect ratio (width / height),
+ * from IGraphics::CalcScreenParams().
+ */
+export function screenSize(aspect) {
+  const amount = 1150 * 1000;
+  const maxWidth = 1500;
+  const maxHeight = 1050;
+  let height = Math.sqrt(amount) / Math.sqrt(aspect);
+  let width = height * aspect;
+  if (width > maxWidth) {
+    width = maxWidth;
+    height = width / aspect;
+  }
+  if (height > maxHeight) {
+    height = maxHeight;
+    width = height * aspect;
+  }
+  return { width, height };
+}
+
+/**
+ * Screen formats the map images fully cover. Other formats need taller captures.
+ * The aspect ratio is the window width / height in pixels, as in IGraphics::ScreenAspect().
+ */
+export const SCREEN_FORMATS = [
+  { id: '16:9', label: '16:9', aspect: 16 / 9 },
+  { id: '21:9', label: '21:9 (2560×1080)', aspect: 2560 / 1080 },
+  { id: '21:9-wide', label: '21:9 (3440×1440)', aspect: 3440 / 1440 },
+];
 
 /** The tee stands on the ctf5 platform at tile (162, 55). */
 export const TEE_POSITION = { x: 5200, y: 1777 };
 
-/** hook_length (tuning) */
-const HOOK_LENGTH = 380;
-
 /**
- * The map layers are screenshots of the game taken with the camera at CAPTURE_CAMERA and a zoom of
- * CAPTURE_ZOOM, one image per group of layers. Each image is drawn with the parallax of its group.
+ * The map layers are screenshots of the game on a 16:9 screen, taken with the camera at CAPTURE_CAMERA
+ * and a zoom of CAPTURE_ZOOM, one image per group of layers. Each image is drawn with the parallax of its group.
  */
+const CAPTURE_SCREEN = screenSize(16 / 9);
 const CAPTURE_CAMERA = { x: 5200, y: 1776 };
 const CAPTURE_ZOOM = Math.pow(0.866025, -3);
 const LAYERS_BEHIND = [
@@ -25,31 +50,86 @@ const LAYERS_BEHIND = [
 ];
 const LAYERS_IN_FRONT = [{ name: 'foreground', parallaxX: 100, parallaxY: 100 }];
 
+/**
+ * Sky of ctf5: one quad with a color per corner, in a group with a parallax of 0.
+ * The GPU draws it as the triangles (0, 1, 3) and (0, 3, 2) with linearly interpolated colors.
+ */
+const SKY_CORNERS = [
+  { x: -1045.52734375, y: -773.134765625, color: [106, 106, 106] },
+  { x: 1069.373046875, y: -773.134765625, color: [106, 106, 106] },
+  { x: -1045.52734375, y: 943.1611328125, color: [59, 73, 130] },
+  { x: 1069.373046875, y: 943.1611328125, color: [67, 69, 100] },
+];
+const SKY_TRIANGLES = [
+  [0, 1, 3],
+  [0, 3, 2],
+];
+
+/** Draws the sky quad for a view of `viewWidth` × `viewHeight` units centered on (0, 0). */
+function renderSky(width, height, viewWidth, viewHeight) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  const image = context.createImageData(width, height);
+  const pixels = image.data;
+
+  for (let row = 0; row < height; row++) {
+    const y = ((row + 0.5) / height) * viewHeight - viewHeight / 2;
+    for (let column = 0; column < width; column++) {
+      const x = ((column + 0.5) / width) * viewWidth - viewWidth / 2;
+      for (const [i, j, k] of SKY_TRIANGLES) {
+        const a = SKY_CORNERS[i];
+        const b = SKY_CORNERS[j];
+        const c = SKY_CORNERS[k];
+        const area = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
+        const weightA = ((b.y - c.y) * (x - c.x) + (c.x - b.x) * (y - c.y)) / area;
+        const weightB = ((c.y - a.y) * (x - c.x) + (a.x - c.x) * (y - c.y)) / area;
+        const weightC = 1 - weightA - weightB;
+        if (weightA < -1e-9 || weightB < -1e-9 || weightC < -1e-9) continue;
+        const offset = (row * width + column) * 4;
+        for (let channel = 0; channel < 3; channel++) {
+          pixels[offset + channel] = Math.round(
+            weightA * a.color[channel] + weightB * b.color[channel] + weightC * c.color[channel],
+          );
+        }
+        pixels[offset + 3] = 255;
+        break;
+      }
+    }
+  }
+  context.putImageData(image, 0, 0);
+  return canvas;
+}
+
 /** Canvas showing the game as DDNet renders it: map, tee, laser, hook, cursor and distance circles. */
 export class GameView {
   /**
-   * images: map layers by name (plus 'sky'), renderer: TeeRenderer,
-   * store: ConfigStore, pointer: PointerInput, laserGun: LaserGun
+   * images: map layers by name, renderer: TeeRenderer, store: ConfigStore,
+   * pointer: PointerInput, player: Player
    */
-  constructor({ canvas, images, renderer, store, pointer, laserGun }) {
+  constructor({ canvas, images, renderer, store, pointer, player }) {
     this.canvas = canvas;
     this.context = canvas.getContext('2d');
     this.images = images;
     this.renderer = renderer;
     this.store = store;
     this.pointer = pointer;
-    this.laserGun = laserGun;
+    this.player = player;
     this.camera = new CameraSmoothing();
 
     this.showDistances = false;
     this.focusedSetting = null;
     this.onFrame = null;
 
+    this.aspect = 16 / 9;
+    this.screen = screenSize(this.aspect);
     this.pixelRatio = 1;
     this.scale = 1;
     this.scaledLayers = null;
     this.ringCache = null;
     this.frameRequest = 0;
+    this.blinkTimer = 0;
 
     const style = getComputedStyle(document.documentElement);
     this.font = style.getPropertyValue('--font').trim();
@@ -60,13 +140,20 @@ export class GameView {
     if (!this.frameRequest) this.frameRequest = requestAnimationFrame(() => this.render());
   }
 
+  /** Screen aspect ratio of the simulated game window. */
+  setAspect(aspect) {
+    this.aspect = aspect;
+    this.screen = screenSize(aspect);
+    this.resize();
+  }
+
   /** Matches the canvas resolution to its size on screen. */
   resize() {
     const box = this.canvas.getBoundingClientRect();
     if (!box.width) return;
     this.pixelRatio = window.devicePixelRatio || 1;
     const width = Math.max(1, Math.round(box.width * this.pixelRatio));
-    const height = Math.max(1, Math.round(((box.width * 9) / 16) * this.pixelRatio));
+    const height = Math.max(1, Math.round((box.width / this.aspect) * this.pixelRatio));
     if (width === this.canvas.width && height === this.canvas.height && this.scaledLayers) return;
     this.canvas.width = width;
     this.canvas.height = height;
@@ -75,7 +162,7 @@ export class GameView {
     this.requestRender();
   }
 
-  /** Resamples each layer once for the current canvas size, so frames only copy pixels. */
+  /** Prepares the sky and resamples each layer once for the current canvas size, so frames only copy pixels. */
   scaleLayers() {
     const { width, height } = this.canvas;
     const resample = (image, targetWidth, targetHeight) => {
@@ -89,12 +176,16 @@ export class GameView {
       return canvas;
     };
 
-    // CRenderTools::MapScreenToWorld: a layer with parallax p is zoomed by (p × (zoom − 1) + 100) / 100.
-    const layers = { sky: resample(this.images.sky, width, height) };
+    const layers = { sky: renderSky(width, height, this.screen.width, this.screen.height) };
+    // IGraphics::MapScreenToWorld(): a layer with parallax p shows (p × (zoom − 1) + 100) / 100 times the zoom 1 view.
     for (const layer of [...LAYERS_BEHIND, ...LAYERS_IN_FRONT]) {
       const parallax = Math.min(Math.max(layer.parallaxX, layer.parallaxY), 100);
       const factor = (parallax * (CAPTURE_ZOOM - 1) + 100) / 100;
-      layers[layer.name] = resample(this.images[layer.name], width * factor, height * factor);
+      layers[layer.name] = resample(
+        this.images[layer.name],
+        CAPTURE_SCREEN.width * factor * (width / this.screen.width),
+        CAPTURE_SCREEN.height * factor * (height / this.screen.height),
+      );
     }
     this.scaledLayers = layers;
   }
@@ -103,8 +194,8 @@ export class GameView {
   drawLayer(layer, camera) {
     const image = this.scaledLayers[layer.name];
     const { width, height } = this.canvas;
-    const x = width / 2 - image.width / 2 - ((camera.x * layer.parallaxX) / 100) * this.scale;
-    const y = height / 2 - image.height / 2 - ((camera.y * layer.parallaxY) / 100) * this.scale;
+    const x = width / 2 - image.width / 2 - ((camera.x * layer.parallaxX) / 100) * (width / this.screen.width);
+    const y = height / 2 - image.height / 2 - ((camera.y * layer.parallaxY) / 100) * (height / this.screen.height);
     this.context.drawImage(image, Math.round(x), Math.round(y));
   }
 
@@ -124,7 +215,7 @@ export class GameView {
       dyncam: this.store.dyncam,
     }, now);
     const offset = this.camera.offset;
-    this.scale = width / SCREEN_WIDTH;
+    this.scale = width / this.screen.width;
     this.onFrame?.({ cursor, limits, offset });
 
     if (!this.scaledLayers) this.scaleLayers();
@@ -145,12 +236,15 @@ export class GameView {
       originX: width / 2 - (TEE_POSITION.x + offset.x) * this.scale,
       originY: height / 2 - (TEE_POSITION.y + offset.y) * this.scale,
     };
-    this.laserGun.update(now, cursor.position);
-    for (const segment of this.laserGun.visibleSegments(now)) {
-      this.renderer.drawLaser(context, view, segment.from, segment.to, segment.width, now / TICK_MS);
+    const tick = gameTick(now);
+    this.player.update(now, cursor.position);
+    for (const segment of this.player.laser.visibleSegments(tick)) {
+      this.renderer.drawLaser(context, view, segment.from, segment.to, segment.width, tick);
     }
-    if (this.pointer.hookHeld) this.renderer.drawHook(context, view, TEE_POSITION, cursor.direction, HOOK_LENGTH);
-    this.renderer.drawPlayer(context, view, TEE_POSITION, cursor.direction, this.pointer.weapon);
+    const hookPosition = this.player.hook.positionAt(tick);
+    if (hookPosition) this.renderer.drawHook(context, view, TEE_POSITION, hookPosition);
+    const pose = this.player.pose(now);
+    this.renderer.drawPlayer(context, view, TEE_POSITION, cursor.direction, this.player.weapon, pose);
 
     // Map in front of the tee
     for (const layer of LAYERS_IN_FRONT) this.drawLayer(layer, layerCamera);
@@ -161,12 +255,18 @@ export class GameView {
     else if (this.focusedSetting) this.drawRings(limits, teeOnCanvas, this.focusedSetting);
 
     const cursorOffset = { x: cursor.position.x - offset.x, y: cursor.position.y - offset.y };
-    this.renderer.drawCursor(context, { x: width / 2, y: height / 2 }, cursorOffset, this.scale, this.pointer.weapon);
+    this.renderer.drawCursor(context, { x: width / 2, y: height / 2 }, cursorOffset, this.scale, this.player.weapon);
 
     const hint = hideHint ? '' : this.pointer.hint();
     if (hint) this.drawHint(hint);
 
-    if (cameraMoving || this.laserGun.isActive()) this.requestRender();
+    if (cameraMoving || this.player.isAnimating(now)) {
+      this.requestRender();
+    } else {
+      // Nothing moves: the next change is the tee's blink.
+      clearTimeout(this.blinkTimer);
+      this.blinkTimer = setTimeout(() => this.requestRender(), this.player.msUntilBlinkChange(now) + 1);
+    }
   }
 
   drawHint(text) {

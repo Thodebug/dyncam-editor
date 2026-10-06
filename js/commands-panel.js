@@ -48,6 +48,8 @@ export class CommandsPanel {
     document.getElementById('paste-load').addEventListener('click', () => this.loadPastedConfig());
     document.getElementById('reset-button').addEventListener('click', () => this.resetOrUndo());
 
+    this.setupFileDrop();
+
     // The settings column has no browser context menu, except in the paste box (right click → Paste).
     document.getElementById('sidebar').addEventListener('contextmenu', (event) => {
       if (!event.target.closest('textarea')) event.preventDefault();
@@ -112,10 +114,49 @@ export class CommandsPanel {
   }
 
   loadPastedConfig() {
-    const count = this.store.loadConfigText(this.pasteInput.value);
+    this.loadConfig(this.pasteInput.value, 'your paste');
+  }
+
+  loadConfig(text, source) {
+    const count = this.store.loadConfigText(text);
     this.pasteMessage.textContent = count
-      ? `Loaded ${count} value${count === 1 ? '' : 's'}. Anything not in your paste uses the DDNet default.`
-      : 'No cl_dyncam_* or cl_mouse_* values found. Paste lines like: cl_dyncam_deadzone 300';
+      ? `Loaded ${count} value${count === 1 ? '' : 's'} from ${source}. Anything not in it uses the DDNet default.`
+      : `No cl_dyncam_* or cl_mouse_* values found in ${source}.`;
+  }
+
+  /** A .cfg file dropped anywhere on the page is loaded like a paste. */
+  setupFileDrop() {
+    const overlay = document.getElementById('drop-overlay');
+    const hasFile = (event) => event.dataTransfer?.types.includes('Files');
+    let depth = 0;
+
+    document.addEventListener('dragenter', (event) => {
+      if (!hasFile(event)) return;
+      depth++;
+      overlay.hidden = false;
+    });
+    document.addEventListener('dragleave', () => {
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) overlay.hidden = true;
+    });
+    document.addEventListener('dragover', (event) => {
+      if (hasFile(event)) event.preventDefault();
+    });
+    document.addEventListener('drop', async (event) => {
+      if (!hasFile(event)) return;
+      event.preventDefault();
+      depth = 0;
+      overlay.hidden = true;
+
+      const file = event.dataTransfer.files[0];
+      this.pasteBox.hidden = false;
+      this.pasteButton.setAttribute('aria-expanded', 'true');
+      if (!file || !file.name.toLowerCase().endsWith('.cfg')) {
+        this.pasteMessage.textContent = 'Drop a .cfg file, like settings_ddnet.cfg.';
+        return;
+      }
+      this.loadConfig(await file.text(), file.name);
+    });
   }
 
   /** Reset all, then for a few seconds the same button undoes the reset. */

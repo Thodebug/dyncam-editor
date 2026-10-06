@@ -27,7 +27,8 @@ Licensed under the [zlib license](https://github.com/ddnet/ddnet/blob/master/lic
 | `assets/sprites/skin-default.png` | `data/skins/default.png` of DDNet, Copyright Magnus Auvinen | zlib |
 
 The map images are screenshots of the ctf5 layers taken in the DDNet client, separated by layer group.
-The collision image has one pixel per tile of the ctf5 game layer (white = solid).
+The sky is drawn from the colors of the ctf5 sky quad.
+The collision image has one pixel per tile of the ctf5 game layer (white = solid, grey = unhookable).
 These derived images are shared under the same CC BY-SA 3.0 license.
 
 ## Fonts

@@ -3,15 +3,14 @@ import { SettingsPanel } from './settings-panel.js';
 import { CommandsPanel } from './commands-panel.js';
 import { setupTooltips } from './tooltip.js';
 import { CollisionMap } from './collision.js';
-import { LaserGun } from './laser.js';
+import { Player } from './player.js';
 import { TeeRenderer } from './tee-renderer.js';
-import { GameView, TEE_POSITION } from './game-view.js';
+import { GameView, SCREEN_FORMATS, TEE_POSITION } from './game-view.js';
 import { PointerInput } from './pointer.js';
 import { SnapshotButton } from './snapshot.js';
 import { cameraOffsetAt } from './camera.js';
 
 const MAP_IMAGES = {
-  sky: 'assets/map/sky.webp',
   'clouds-far': 'assets/map/clouds-far.webp',
   'clouds-near': 'assets/map/clouds-near.webp',
   cave: 'assets/map/cave.webp',
@@ -38,8 +37,13 @@ async function loadImages(urls) {
   return Object.fromEntries(entries);
 }
 
+/** Aspect ratio of the game view, from the chosen screen format. */
+function viewAspect(store) {
+  return (SCREEN_FORMATS.find((format) => format.id === store.screenFormat) ?? SCREEN_FORMATS[0]).aspect;
+}
+
 /** The game view takes the full height of the page; the settings column gets the remaining width. */
-function fitPageLayout() {
+function fitPageLayout(aspect) {
   const page = document.querySelector('.page');
   if (!matchMedia('(min-width: 1001px)').matches) {
     page.style.gridTemplateColumns = '';
@@ -52,7 +56,7 @@ function fitPageLayout() {
   const gap = parseFloat(style.columnGap) || 0;
   const minimumSidebarWidth = 240 * unit;
 
-  let viewWidth = (contentHeight * 16) / 9;
+  let viewWidth = contentHeight * aspect;
   if (contentWidth - gap - viewWidth < minimumSidebarWidth) {
     viewWidth = Math.max(200, contentWidth - gap - minimumSidebarWidth);
   }
@@ -71,13 +75,54 @@ function signed(value) {
   return '0';
 }
 
+/** The screen format tab: a list of formats under the tab, the chosen one is kept in the store. */
+function setupScreenMenu(store) {
+  const button = byId('screen-button');
+  const menu = byId('screen-menu');
+  const close = () => {
+    menu.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+  };
+
+  for (const format of SCREEN_FORMATS) {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.setAttribute('role', 'option');
+    option.dataset.format = format.id;
+    option.textContent = format.label;
+    option.addEventListener('click', () => {
+      store.setScreenFormat(format.id);
+      close();
+    });
+    menu.appendChild(option);
+  }
+
+  button.addEventListener('click', () => {
+    menu.hidden = !menu.hidden;
+    button.setAttribute('aria-expanded', String(!menu.hidden));
+  });
+  document.addEventListener('pointerdown', (event) => {
+    if (!event.target.closest('.screen-group')) close();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') close();
+  });
+
+  return () => {
+    const format = SCREEN_FORMATS.find((item) => item.id === store.screenFormat) ?? SCREEN_FORMATS[0];
+    byId('screen-label').textContent = format.label;
+    for (const option of menu.children) option.setAttribute('aria-selected', String(option.dataset.format === format.id));
+  };
+}
+
 async function start() {
   setupTooltips(byId('tooltip'));
-  fitPageLayout();
-  addEventListener('resize', fitPageLayout);
 
   const store = new ConfigStore();
   let gameView = null;
+  const fitLayout = () => fitPageLayout(viewAspect(store));
+  addEventListener('resize', fitLayout);
+  const updateScreenMenu = setupScreenMenu(store);
 
   const settingsPanel = new SettingsPanel({
     store,
@@ -90,10 +135,21 @@ async function start() {
   const commandsPanel = new CommandsPanel({ store });
 
   const dyncamToggle = byId('dyncam-toggle');
+  const stage = byId('stage');
+  let shownAspect = null;
   store.onChange(() => {
     settingsPanel.update();
     commandsPanel.update();
     setSwitch(dyncamToggle, store.dyncam);
+    updateScreenMenu();
+
+    const aspect = viewAspect(store);
+    if (aspect !== shownAspect) {
+      shownAspect = aspect;
+      stage.style.setProperty('--aspect', String(aspect));
+      fitLayout();
+      gameView?.setAspect(aspect);
+    }
     gameView?.requestRender();
   });
   dyncamToggle.addEventListener('click', () => store.setDyncam(!store.dyncam));
@@ -116,10 +172,17 @@ async function start() {
   ]);
 
   const canvas = byId('game-canvas');
-  const stage = byId('stage');
-  const laserGun = new LaserGun(collision, TEE_POSITION);
-  const pointer = new PointerInput({ canvas, stage, store, laserGun, onChange: () => gameView.requestRender() });
-  gameView = new GameView({ canvas, images: map, renderer: new TeeRenderer(sprites), store, pointer, laserGun });
+  const player = new Player(collision, TEE_POSITION);
+  const pointer = new PointerInput({
+    canvas,
+    stage,
+    store,
+    player,
+    getScreen: () => gameView.screen,
+    onChange: () => gameView.requestRender(),
+  });
+  gameView = new GameView({ canvas, images: map, renderer: new TeeRenderer(sprites), store, pointer, player });
+  gameView.setAspect(viewAspect(store));
   new SnapshotButton({ gameView, store });
 
   const captureToggle = byId('capture-toggle');

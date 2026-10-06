@@ -22,6 +22,7 @@ export class ConfigStore {
     this.dyncam = true;
     this.baseline = ConfigStore.defaultBaseline();
     this.changesOnly = false;
+    this.screenFormat = '16:9';
     this.listeners = [];
     this.saveTimer = 0;
   }
@@ -52,6 +53,12 @@ export class ConfigStore {
 
   setChangesOnly(enabled) {
     this.changesOnly = enabled;
+    this.notify();
+  }
+
+  /** Screen format of the game view. Kept in the browser, not in share links. */
+  setScreenFormat(id) {
+    this.screenFormat = id;
     this.notify();
   }
 
@@ -164,6 +171,7 @@ export class ConfigStore {
       dyncam: this.dyncam,
       baseline: this.baseline,
       changesOnly: this.changesOnly,
+      screenFormat: this.screenFormat,
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -185,6 +193,7 @@ export class ConfigStore {
     if (data.values) this.replaceValues(data.values);
     if (typeof data.dyncam === 'boolean') this.dyncam = data.dyncam;
     if (typeof data.changesOnly === 'boolean') this.changesOnly = data.changesOnly;
+    if (typeof data.screenFormat === 'string') this.screenFormat = data.screenFormat;
     if (data.baseline) {
       const baseline = ConfigStore.defaultBaseline();
       for (const name of Object.keys(baseline)) {

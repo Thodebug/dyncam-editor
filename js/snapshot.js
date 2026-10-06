@@ -1,5 +1,4 @@
 const VIEW_WIDTH = 1600;
-const VIEW_HEIGHT = 900;
 const PADDING = 28;
 const FONT_SIZE = 22;
 const LINE_HEIGHT = FONT_SIZE * 1.5;
@@ -18,18 +17,21 @@ export function renderSnapshot(viewCanvas, lines, font, backgroundColor) {
     ...lines.map((line) => measure.measureText(`${line.name} ${line.value}`).width),
   );
   const panelWidth = Math.ceil(textWidth + PADDING * 2 + 24);
+  const viewHeight = Math.round((VIEW_WIDTH * viewCanvas.height) / viewCanvas.width);
+  const listHeight = Math.max(lines.length, 1) * LINE_HEIGHT + 20;
+  const height = Math.max(viewHeight, PADDING + 56 + listHeight + PADDING);
 
   const canvas = document.createElement('canvas');
   canvas.width = VIEW_WIDTH + panelWidth;
-  canvas.height = VIEW_HEIGHT;
+  canvas.height = height;
   const context = canvas.getContext('2d');
 
   context.fillStyle = backgroundColor;
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.imageSmoothingQuality = 'high';
-  context.drawImage(viewCanvas, 0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+  context.drawImage(viewCanvas, 0, Math.round((height - viewHeight) / 2), VIEW_WIDTH, viewHeight);
   context.fillStyle = 'rgba(0, 0, 0, 0.5)';
-  context.fillRect(VIEW_WIDTH, 0, panelWidth, VIEW_HEIGHT);
+  context.fillRect(VIEW_WIDTH, 0, panelWidth, height);
 
   const drawText = (text, x, y, size, opacity) => {
     context.font = `${size}px ${font}`;
@@ -48,7 +50,7 @@ export function renderSnapshot(viewCanvas, lines, font, backgroundColor) {
 
   context.fillStyle = 'rgba(0, 0, 0, 0.15)';
   context.beginPath();
-  context.roundRect(left - 12, PADDING + 56, panelWidth - PADDING * 2 + 24, Math.max(lines.length, 1) * LINE_HEIGHT + 20, 8);
+  context.roundRect(left - 12, PADDING + 56, panelWidth - PADDING * 2 + 24, listHeight, 8);
   context.fill();
 
   if (!lines.length) drawText('No changes', left, listTop, FONT_SIZE, 0.5);

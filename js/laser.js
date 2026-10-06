@@ -17,14 +17,6 @@ export const TICK_MS = 20; // 50 server ticks per second
 /** A segment is shown until the next CLaser::DoBounce(), which runs once more than 7.5 ticks have passed. */
 const SEGMENT_TICKS = Math.floor((LASER.bounceDelayMs * 50) / 1000) + 1;
 
-/** Fire direction: the input target is the mouse position cast to integers, then normalized by the server. */
-export function aimDirection(cursorPosition) {
-  let x = Math.trunc(cursorPosition.x);
-  const y = Math.trunc(cursorPosition.y);
-  if (x === 0 && y === 0) x = 1;
-  return normalizeVector({ x, y });
-}
-
 /**
  * Path of one shot, following CLaser::DoBounce().
  * Returns the segments in order: [{ from, to }].
@@ -42,16 +34,16 @@ export function traceLaser(collision, origin, direction) {
       x: f32(position.x + f32(heading.x * energy)),
       y: f32(position.y + f32(heading.y * energy)),
     };
-    const hitPoint = collision.intersectLine(position, target);
+    const hit = collision.intersectLine(position, target);
 
-    if (!hitPoint) {
+    if (!hit) {
       segments.push({ from: position, to: target });
       break;
     }
 
     // Bounce: step back out of the wall, then reflect the direction.
     const from = position;
-    const bouncePosition = { ...hitPoint };
+    const bouncePosition = { ...hit.before };
     const bounceVelocity = { x: f32(heading.x * 4), y: f32(heading.y * 4) };
     collision.movePoint(bouncePosition, bounceVelocity);
     position = bouncePosition;
@@ -70,10 +62,7 @@ export function traceLaser(collision, origin, direction) {
   return segments;
 }
 
-/**
- * Fires lasers while the trigger is held and tells which segments are visible at a given time.
- * Times are in ms (performance.now()).
- */
+/** Fires lasers while the trigger is held and tells which segments are visible at a given game time. */
 export class LaserGun {
   constructor(collision, origin) {
     this.collision = collision;
@@ -83,21 +72,20 @@ export class LaserGun {
     this.nextFireTick = 0;
   }
 
-  /** Fires if the trigger is held and the weapon has reloaded. */
-  update(now, cursorPosition) {
-    const tick = Math.floor(now / TICK_MS);
-    if (!this.triggerHeld || tick < this.nextFireTick) return;
-    const segments = traceLaser(this.collision, this.origin, aimDirection(cursorPosition));
+  /** Fires along `direction` if the trigger is held and the weapon has reloaded. Returns true when it fires. */
+  update(tick, direction) {
+    if (!this.triggerHeld || tick < this.nextFireTick) return false;
+    const segments = traceLaser(this.collision, this.origin, direction);
     this.shots.push({ tick, segments });
     this.nextFireTick = tick + LASER.fireDelayTicks;
+    return true;
   }
 
   /**
-   * Segments to draw at `now`: [{ from, to, width }].
+   * Segments to draw at `tick` (game time in ticks, with a fraction): [{ from, to, width }].
    * width goes from 1 to 0 over laser_bounce_delay, like CItems::RenderLaser().
    */
-  visibleSegments(now) {
-    const tick = now / TICK_MS;
+  visibleSegments(tick) {
     this.shots = this.shots.filter((shot) => tick < shot.tick + SEGMENT_TICKS * shot.segments.length);
 
     const visible = [];

@@ -11,7 +11,7 @@ This editor shows what each value does, on the ctf5 map, exactly as the game dra
 ## Features
 
 - The real game view: ctf5 layers with their parallax, the default tee, its weapon and the cursor,
-  at zoom 1 on a 16:9 screen.
+  at zoom 1, on a 16:9 or 21:9 screen.
 - Every `cl_dyncam_*` and `cl_mouse_*` setting, with the game's ranges, defaults and descriptions.
 - The `cl_dyncam` switch shows either camera mode, `cl_dyncam 1` or `cl_dyncam 0`.
 - Camera smoothing (`cl_dyncam_smoothness`, `cl_dyncam_stabilizing`) computed like the game.
@@ -19,11 +19,12 @@ This editor shows what each value does, on the ctf5 map, exactly as the game dra
   (`inp_mousesens`, `cl_dyncam_mousesens`).
 - **Show distances**: circles for the max and min cursor distance, the deadzone and the max camera offset,
   and live values.
-- Left click fires the laser, with real collisions and bounces (classic fng tuning). Right click shows the hook
-  at full length. The mouse wheel switches between laser and hammer.
+- The tee behaves like in game: the laser fires with real collisions and bounces (classic fng tuning) and recoil,
+  the hammer swings, the hook flies, grabs or retracts on the map, and the tee blinks when idle.
+  Left click fires, right click hooks, the mouse wheel switches between laser and hammer.
 - Notes under each setting when a value has no effect, and warnings for settings that lock the camera or the cursor.
 - Commands ready to paste in the game console, with an option to list only the changed values.
-- Share link, paste of an existing config, reset with undo, image of the view for Discord.
+- Share link, paste or drop of `settings_ddnet.cfg`, reset with undo, image of the view for Discord.
 - The last config is kept in the browser.
 
 ## Apply the commands in game
@@ -52,7 +53,9 @@ js/
   config-store.js       current values, commands, share link, browser storage
   camera.js             cursor limits and camera smoothing
   collision.js          map collision in 32-bit floats
+  player.js             the tee: weapons, attack animations, blinking
   laser.js              laser path and timing
+  hook.js               hook flight, grab and retraction
   tee-renderer.js       tee, weapon, hook, laser and cursor sprites
   game-view.js          game view canvas: layers, parallax, distance circles
   pointer.js            aiming, mouse capture, buttons and wheel
@@ -70,9 +73,11 @@ The formulas follow the DDNet source code. Comments in the code name the DDNet f
 
 ## Limits
 
-- One map (ctf5), a 16:9 screen and zoom 1.
-- The hook is drawn at full length and does not collide with the map.
-- The laser uses the classic fng tuning: 800 units of reach and one bounce.
+- One map (ctf5) and zoom 1. Screen formats: 16:9 and 21:9. Taller formats (16:10, 4:3, 5:4) need new captures.
+- The map images were captured at a zoom of 1.54 and are enlarged to zoom 1, so they are slightly softer
+  than in game.
+- When the hook grabs the ground, the game pulls the tee toward it. Here the tee stays in place.
+- The laser and hook use the classic fng tuning: laser reach 800 with one bounce, hook length 380.
 
 ## License
 

@@ -35,6 +35,15 @@
           <span class="checkbox"><span class="icon">&#xF00D;</span></span>Show distances
         </button>
       </div>
+      <div class="tab-group screen-group">
+        <button class="tab tab-menu" id="screen-button" type="button" aria-haspopup="listbox" aria-expanded="false"
+          data-tip="Screen format of your game window. The visible area of the map depends on it.">
+          <span class="icon">&#xF390;</span><span id="screen-label">16:9</span><span class="icon tab-caret">&#xF078;</span>
+        </button>
+        <div class="menu" id="screen-menu" role="listbox" aria-label="Screen format" hidden></div>
+      </div>
+      <a class="tab tab-link" href="https://github.com/Thodebug/dyncam-editor" target="_blank" rel="noopener"
+        data-tip="Source code, issues and suggestions on GitHub"><span class="icon">&#xF121;</span>GitHub</a>
     </header>
 
     <main class="page">
@@ -68,18 +77,19 @@
           <div class="button-grid">
             <button class="button" id="copy-button" type="button"><span class="icon">&#xF0C5;</span><span id="copy-label">Copy</span></button>
             <button class="button" id="share-button" type="button" data-tip="Copy a link that reopens the editor with these exact values"><span class="icon">&#xF0C1;</span><span id="share-label">Share link</span></button>
-            <button class="button" id="paste-button" type="button" aria-expanded="false"><span class="icon">&#xF0EA;</span>Paste config</button>
+            <button class="button" id="paste-button" type="button" aria-expanded="false"
+              data-tip="Paste your config, or drop your settings_ddnet.cfg file on the page. DDNet keeps it in %APPDATA%\DDNet on Windows, ~/.local/share/ddnet on Linux and ~/Library/Application Support/DDNet on macOS."><span class="icon">&#xF0EA;</span>Paste config</button>
             <button class="button" id="reset-button" type="button" data-tip="Set every camera setting back to the DDNet default"><span class="icon">&#xF0E2;</span><span id="reset-label">Reset all</span></button>
           </div>
           <div id="paste-box" hidden>
-            <textarea id="paste-input" spellcheck="false" placeholder="Paste settings_ddnet.cfg or console lines, e.g. cl_dyncam_deadzone 300"></textarea>
+            <textarea id="paste-input" spellcheck="false" placeholder="Paste settings_ddnet.cfg or console lines, e.g. cl_dyncam_deadzone 300. You can also drop the file on the page."></textarea>
             <div class="button-grid single"><button class="button" id="paste-load" type="button">Load</button></div>
             <div class="paste-message" id="paste-message" role="status"></div>
           </div>
         </section>
 
         <section class="section block mode-block" id="block-dyncam">
-          <div class="block-title">cl_dyncam 1 <span class="block-subtitle">dynamic camera, uses cl_dyncam_*</span></div>
+          <div class="block-title">cl_dyncam 1<button class="info-button icon" type="button" aria-label="About cl_dyncam 1" data-tip="Dynamic camera: uses the cl_dyncam_* settings.">&#xF05A;</button></div>
           <div id="settings-dyncam"></div>
           <details class="more-settings">
             <summary><span class="icon when-closed">&#xF078;</span><span class="icon when-open">&#xF077;</span>More settings</summary>
@@ -88,7 +98,7 @@
         </section>
 
         <section class="section block mode-block" id="block-mouse">
-          <div class="block-title">cl_dyncam 0 <span class="block-subtitle">normal camera, uses cl_mouse_*</span></div>
+          <div class="block-title">cl_dyncam 0<button class="info-button icon" type="button" aria-label="About cl_dyncam 0" data-tip="Normal camera: uses the cl_mouse_* settings.">&#xF05A;</button></div>
           <div id="settings-mouse"></div>
           <details class="more-settings">
             <summary><span class="icon when-closed">&#xF078;</span><span class="icon when-open">&#xF077;</span>More settings</summary>
@@ -97,7 +107,7 @@
         </section>
 
         <section class="section block" id="block-preview">
-          <div class="block-title">Capture mouse <span class="block-subtitle">your sensitivity, for the preview only</span></div>
+          <div class="block-title">Capture mouse<button class="info-button icon" type="button" aria-label="About Capture mouse" data-tip="Your mouse sensitivity, only used by the preview with Capture mouse.">&#xF05A;</button></div>
           <div id="settings-preview"></div>
         </section>
       </aside>
@@ -105,6 +115,8 @@
   </div>
 
   <div class="tooltip" id="tooltip" role="tooltip"></div>
+
+  <div class="drop-overlay" id="drop-overlay" hidden>Drop settings_ddnet.cfg to load your camera settings</div>
 
   <div class="popup" id="snapshot-popup" hidden>
     <div class="popup-frame">
