@@ -9,21 +9,22 @@ import { GameView, SCREEN_FORMATS, TEE_POSITION } from './game-view.js';
 import { PointerInput } from './pointer.js';
 import { SnapshotButton } from './snapshot.js';
 import { cameraOffsetAt } from './camera.js';
-import { LoadingScreen, downloadImages } from './loading.js';
+import { LoadingScreen, downloadFiles, imageFromBlob } from './loading.js';
+import { Graphics, WebGLUnavailableError } from './graphics.js';
+import { readMap } from './map-file.js';
+import { MapRenderer } from './map-renderer.js';
 
-const MAP_IMAGES = {
-  'clouds-far': 'assets/map/clouds-far.webp',
-  'clouds-near': 'assets/map/clouds-near.webp',
-  cave: 'assets/map/cave.webp',
-  background: 'assets/map/background.webp',
-  foreground: 'assets/map/foreground.webp',
-};
+const MAP_FILE = 'assets/map/ctf5.map';
+/** The images of data/mapres used by ctf5 */
+const MAP_IMAGES = ['bg_cloud1', 'bg_cloud2', 'generic_unhookable', 'grass_doodads', 'grass_main'];
 const SPRITE_IMAGES = {
   skin: 'assets/sprites/skin-default.png',
   game: 'assets/sprites/game.png',
   particles: 'assets/sprites/particles.png',
 };
-const COLLISION_IMAGE = 'assets/map/collision.png';
+
+/** Gives the browser a frame to show the loading screen. */
+const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)));
 
 const byId = (id) => document.getElementById(id);
 
@@ -161,22 +162,51 @@ async function start() {
 
   // Game view
   const loadingScreen = new LoadingScreen(byId('loading'));
-  let images;
+  const canvas = byId('game-canvas');
+  let map;
+  let mapImages;
+  let spriteImages;
+  let graphics;
+  const steps = 3;
   try {
-    [images] = await Promise.all([
-      downloadImages({ ...MAP_IMAGES, ...SPRITE_IMAGES, collision: COLLISION_IMAGE }, (progress) =>
+    const mapImageUrls = Object.fromEntries(MAP_IMAGES.map((name) => [name, `assets/mapres/${name}.png`]));
+    const [files] = await Promise.all([
+      downloadFiles({ map: MAP_FILE, ...mapImageUrls, ...SPRITE_IMAGES }, (progress) =>
         loadingScreen.showDownload(progress),
       ),
       document.fonts.load('12px "DejaVu Sans"').catch(() => {}),
     ]);
+    loadingScreen.showPreparing(0, steps);
+    const decode = async (keys) =>
+      Object.fromEntries(await Promise.all(keys.map(async (key) => [key, await imageFromBlob(files[key])])));
+    [map, mapImages, spriteImages] = await Promise.all([
+      files.map.arrayBuffer().then(readMap),
+      decode(MAP_IMAGES),
+      decode(Object.keys(SPRITE_IMAGES)),
+    ]);
+    loadingScreen.showPreparing(1, steps);
+    await nextFrame();
+    graphics = new Graphics(canvas);
   } catch (error) {
-    loadingScreen.showError();
+    if (error instanceof WebGLUnavailableError) {
+      loadingScreen.showError(
+        'WebGL 2 is not available in this browser.',
+        'Turn on hardware acceleration or try another browser.',
+      );
+    } else {
+      loadingScreen.showError();
+    }
     throw error;
   }
-  const imagesOf = (urls) => Object.fromEntries(Object.keys(urls).map((key) => [key, images[key]]));
 
-  const canvas = byId('game-canvas');
-  const player = new Player(CollisionMap.fromImage(images.collision), TEE_POSITION);
+  const mapRenderer = new MapRenderer(graphics, map, mapImages);
+  loadingScreen.showPreparing(2, steps);
+  await nextFrame();
+  const teeRenderer = new TeeRenderer(graphics, spriteImages);
+  loadingScreen.showPreparing(3, steps);
+
+  const gameLayer = map.groups.flatMap((group) => group.layers).find((layer) => layer.type === 'tiles' && layer.game);
+  const player = new Player(CollisionMap.fromGameLayer(gameLayer), TEE_POSITION);
   const pointer = new PointerInput({
     canvas,
     stage,
@@ -185,19 +215,8 @@ async function start() {
     getScreen: () => gameView.screen,
     onChange: () => gameView.requestRender(),
   });
-  const view = new GameView({
-    canvas,
-    images: imagesOf(MAP_IMAGES),
-    renderer: new TeeRenderer(imagesOf(SPRITE_IMAGES)),
-    store,
-    pointer,
-    player,
-  });
-  view.setAspect(viewAspect(store));
-  loadingScreen.showPreparing(0, view.scaleStepCount);
-  await view.scaleLayersInSteps((done, total) => loadingScreen.showPreparing(done, total));
-  gameView = view;
-  if (view.aspect !== viewAspect(store)) view.setAspect(viewAspect(store));
+  gameView = new GameView({ canvas, graphics, map: mapRenderer, renderer: teeRenderer, store, pointer, player });
+  gameView.setAspect(viewAspect(store));
   new SnapshotButton({ gameView, store });
 
   const captureToggle = byId('capture-toggle');

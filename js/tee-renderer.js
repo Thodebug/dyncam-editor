@@ -1,10 +1,13 @@
+import { PRIMITIVE_STRIDE, colorByte } from './graphics.js';
+
 /**
  * Draws the tee, its weapon, the hook, the laser and the cursor with the game's own sprites,
  * at the sizes and positions used by the DDNet client
- * (src/game/client/render.cpp RenderTee6, players.cpp, items.cpp, hud.cpp).
+ * (src/game/client/render.cpp RenderTee6, components/players.cpp, items.cpp, hud.cpp).
  *
- * World coordinates are in units. A `view` maps them to canvas pixels:
- * canvasX = view.originX + worldX * view.scale.
+ * Like the client, each sprite is its own texture cut from the sprite sheet (LoadSpriteTexture()),
+ * drawn as a quad of a quad container: the quad turns around its center, is scaled, then moved to its position
+ * (RenderQuadContainerEx()). Positions are in world units, in the screen mapped by Graphics.mapScreen().
  */
 
 /** Sprites in game.png (grid of 32 × 16 cells) and their size in game (datasrc/content.py). */
@@ -13,23 +16,24 @@ const WEAPONS = {
   laser: { sprite: [2, 12, 7, 3], cursor: [0, 12, 2, 2], visualSize: 92, offsetX: 24, offsetY: -2 },
 };
 
-const CURSOR_SIZE = 64;
-const HAND_SIZE = 20;
-const HOOK_SIZE = { width: 24, height: 16 };
-
 /** Default cl_laser_rifle_outline_color and cl_laser_rifle_inner_color (packed HSL). */
 const LASER_OUTLINE_COLOR = 11176233;
 const LASER_INNER_COLOR = 11206591;
 
-/** ColorHSLA(packed) converted to RGB, each channel from 0 to 1. */
-function packedHslToRgb(packed) {
-  const hue = ((packed >> 16) & 255) / 255;
-  const saturation = ((packed >> 8) & 255) / 255;
-  const lightness = (packed & 255) / 255;
+/** Texture coordinates of the corners top left, top right, bottom right, bottom left (QuadsSetSubset()). */
+const SUBSET_NORMAL = [0, 0, 1, 0, 1, 1, 0, 1];
+const SUBSET_FLIP_Y = [0, 1, 1, 1, 1, 0, 0, 0];
 
-  const sector = hue * 6;
-  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
-  const second = chroma * (1 - Math.abs((sector % 2) - 1));
+/** ColorHSLA(packed) converted to RGB (color_cast in src/base/color.h), each channel from 0 to 1. */
+function packedHslToRgb(packed) {
+  const f = Math.fround;
+  const hue = f(((packed >> 16) & 255) / 255);
+  const saturation = f(((packed >> 8) & 255) / 255);
+  const lightness = f((packed & 255) / 255);
+
+  const sector = f(hue * 6);
+  const chroma = f(f(1 - Math.abs(f(2 * lightness) - 1)) * saturation);
+  const second = f(chroma * f(1 - Math.abs(f(sector % 2) - 1)));
   let rgb;
   switch (Math.trunc(sector)) {
     case 0: rgb = [chroma, second, 0]; break;
@@ -39,103 +43,145 @@ function packedHslToRgb(packed) {
     case 4: rgb = [second, 0, chroma]; break;
     default: rgb = [chroma, 0, second]; break;
   }
-  const match = lightness - chroma / 2;
-  return rgb.map((channel) => channel + match);
+  const match = f(lightness - f(chroma / 2));
+  return rgb.map((channel) => f(channel + match));
 }
 
-function cssColor(rgb) {
-  return `rgb(${rgb.map((channel) => Math.round(channel * 255)).join(',')})`;
-}
-
-/** Copies a rectangle of an image into its own canvas. */
-function cropImage(image, x, y, width, height) {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  canvas.getContext('2d').drawImage(image, x, y, width, height, 0, 0, width, height);
-  return canvas;
-}
-
-/** Multiplies the colors of an image, like Graphics()->SetColor() does on a texture. */
-function tintImage(image, rgb) {
-  const canvas = document.createElement('canvas');
-  canvas.width = image.width;
-  canvas.height = image.height;
-  const context = canvas.getContext('2d');
-  context.drawImage(image, 0, 0);
-  const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-  const data = pixels.data;
-  for (let i = 0; i < data.length; i += 4) {
-    data[i] *= rgb[0];
-    data[i + 1] *= rgb[1];
-    data[i + 2] *= rgb[2];
+/** CImageInfo::CopyRectFrom(): a rectangle of RGBA pixels. */
+function cropPixels(pixels, x, y, width, height) {
+  const data = new Uint8Array(width * height * 4);
+  for (let row = 0; row < height; row++) {
+    const start = ((y + row) * pixels.width + x) * 4;
+    data.set(pixels.data.subarray(start, start + width * 4), row * width * 4);
   }
-  context.putImageData(pixels, 0, 0);
-  return canvas;
+  return { width, height, data };
 }
+
+/** Quad of a quad container: top left corner, size and texture coordinates (QuadContainerAddSprite()). */
+function containerQuad(x, y, width, height, subset = SUBSET_NORMAL) {
+  return { x, y, width, height, subset };
+}
+
+const centeredQuad = (width, height, subset) => containerQuad(-width / 2, -height / 2, width, height, subset);
+
+const FOOT_QUAD = containerQuad(-32, -16, 64, 32);
+const BODY_QUAD = centeredQuad(64, 64);
+const EYE_QUAD = centeredQuad(64 * 0.4, 64 * 0.4);
+const HAND_QUAD = centeredQuad(20, 20);
+const HOOK_QUAD = containerQuad(-12, -8, 24, 16);
+const SPLAT_QUAD = centeredQuad(24, 24);
 
 export class TeeRenderer {
-  /** skin: data/skins/default.png, game: data/game.png, particles: data/particles.png */
-  constructor({ skin, game, particles }) {
-    const skinCell = skin.width / 8;
-    const skinPart = (x, y, width, height) =>
-      cropImage(skin, x * skinCell, y * skinCell, width * skinCell, height * skinCell);
-    this.body = skinPart(0, 0, 3, 3);
-    this.bodyOutline = skinPart(3, 0, 3, 3);
-    this.foot = skinPart(6, 1, 2, 1);
-    this.footOutline = skinPart(6, 2, 2, 1);
-    this.hand = skinPart(6, 0, 1, 1);
-    this.handOutline = skinPart(7, 0, 1, 1);
-    this.eye = skinPart(2, 3, 1, 1);
-
-    const gameCell = game.width / 32;
-    const gamePart = ([x, y, width, height]) =>
-      cropImage(game, x * gameCell, y * gameCell, width * gameCell, height * gameCell);
-    this.weapons = {};
-    for (const [name, weapon] of Object.entries(WEAPONS)) {
-      const [, , spriteWidth, spriteHeight] = weapon.sprite;
-      const [, , cursorWidth, cursorHeight] = weapon.cursor;
-      const spriteScale = weapon.visualSize / Math.hypot(spriteWidth, spriteHeight);
-      this.weapons[name] = {
-        image: gamePart(weapon.sprite),
-        width: spriteWidth * spriteScale,
-        height: spriteHeight * spriteScale,
-        offsetX: weapon.offsetX,
-        offsetY: weapon.offsetY,
-        cursor: gamePart(weapon.cursor),
-        cursorSize: (CURSOR_SIZE * cursorWidth) / Math.hypot(cursorWidth, cursorHeight),
-      };
-    }
-    this.hookHead = gamePart([3, 0, 2, 1]);
-    this.hookChain = gamePart([2, 0, 1, 1]);
-
-    // part_splat01..03 in particles.png (8 × 8 cells), tinted with the laser colors
-    const particleCell = particles.width / 8;
-    const splats = [0, 1, 2].map((i) => cropImage(particles, (2 + i) * particleCell, 0, particleCell, particleCell));
+  /** graphics: Graphics. skin: data/skins/default.png, game: data/game.png, particles: data/particles.png */
+  constructor(graphics, { skin, game, particles }) {
+    this.graphics = graphics;
+    this.images = { skin, game, particles };
+    this.vertices = new Float32Array(6 * PRIMITIVE_STRIDE);
     this.laserOutline = packedHslToRgb(LASER_OUTLINE_COLOR);
     this.laserInner = packedHslToRgb(LASER_INNER_COLOR);
-    this.splatsOutline = splats.map((splat) => tintImage(splat, this.laserOutline));
-    this.splatsInner = splats.map((splat) => tintImage(splat, this.laserInner));
+    this.upload();
   }
 
-  /** Draws an image centered on a world position, with a size in units, a rotation and flips. */
-  drawSprite(context, view, image, x, y, width, height, rotation = 0, flipX = false, flipY = false) {
-    context.save();
-    context.translate(view.originX + x * view.scale, view.originY + y * view.scale);
-    if (rotation) context.rotate(rotation);
-    context.scale(flipX ? -1 : 1, flipY ? -1 : 1);
-    context.drawImage(image, (-width / 2) * view.scale, (-height / 2) * view.scale, width * view.scale, height * view.scale);
-    context.restore();
+  /** Creates the sprite textures. Called again after the WebGL context is restored. */
+  upload() {
+    const graphics = this.graphics;
+    const sheet = (image, gridX, gridY) => {
+      const pixels = graphics.readImagePixels(image);
+      const cellWidth = pixels.width / gridX;
+      const cellHeight = pixels.height / gridY;
+      return ([x, y, width, height]) =>
+        graphics.createTexture(cropPixels(pixels, x * cellWidth, y * cellHeight, width * cellWidth, height * cellHeight));
+    };
+
+    // Skin sprites (grid of 8 × 4 cells)
+    const skinSprite = sheet(this.images.skin, 8, 4);
+    this.body = skinSprite([0, 0, 3, 3]);
+    this.bodyOutline = skinSprite([3, 0, 3, 3]);
+    this.foot = skinSprite([6, 1, 2, 1]);
+    this.footOutline = skinSprite([6, 2, 2, 1]);
+    this.hand = skinSprite([6, 0, 1, 1]);
+    this.handOutline = skinSprite([7, 0, 1, 1]);
+    this.eye = skinSprite([2, 3, 1, 1]);
+
+    const gameSprite = sheet(this.images.game, 32, 16);
+    this.weapons = {};
+    for (const [name, weapon] of Object.entries(WEAPONS)) {
+      // GetSpriteScale(): the sprite's width and height divided by the length of its diagonal
+      const [, , spriteWidth, spriteHeight] = weapon.sprite;
+      const spriteScale = weapon.visualSize / Math.hypot(spriteWidth, spriteHeight);
+      const [, , cursorWidth, cursorHeight] = weapon.cursor;
+      const cursorScale = 64 / Math.hypot(cursorWidth, cursorHeight);
+      this.weapons[name] = {
+        texture: gameSprite(weapon.sprite),
+        quad: centeredQuad(spriteWidth * spriteScale, spriteHeight * spriteScale),
+        flippedQuad: centeredQuad(spriteWidth * spriteScale, spriteHeight * spriteScale, SUBSET_FLIP_Y),
+        offsetX: weapon.offsetX,
+        offsetY: weapon.offsetY,
+        cursor: gameSprite(weapon.cursor),
+        cursorQuad: centeredQuad(cursorWidth * cursorScale, cursorHeight * cursorScale),
+      };
+    }
+    this.hookHead = gameSprite([3, 0, 2, 1]);
+    this.hookChain = gameSprite([2, 0, 1, 1]);
+
+    // part_splat01..03 in particles.png (8 × 8 cells)
+    const particleSprite = sheet(this.images.particles, 8, 8);
+    this.splats = [0, 1, 2].map((i) => particleSprite([2 + i, 0, 1, 1]));
   }
 
   /**
-   * Tee standing still at `position`, aiming along `direction` (unit vector), holding `weaponName`.
-   * pose: { recoil, hammerAngle, blinking } from Player.pose().
+   * RenderQuadContainerEx(): `quad` turned by `rotation` around its center, scaled, then moved to (x, y),
+   * with the color (RGBA from 0 to 1) stored as bytes like Graphics()->SetColor().
    */
-  drawPlayer(context, view, position, direction, weaponName, pose) {
+  drawQuad(texture, quad, x, y, { scaleX = 1, scaleY = 1, rotation = 0, color = [1, 1, 1, 1] } = {}) {
+    const corners = [
+      [quad.x, quad.y],
+      [quad.x + quad.width, quad.y],
+      [quad.x + quad.width, quad.y + quad.height],
+      [quad.x, quad.y + quad.height],
+    ];
+    const centerX = quad.x + quad.width / 2;
+    const centerY = quad.y + quad.height / 2;
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const points = corners.map(([cornerX, cornerY], corner) => {
+      let px = cornerX;
+      let py = cornerY;
+      if (rotation !== 0) {
+        const dx = px - centerX;
+        const dy = py - centerY;
+        px = dx * cos - dy * sin + centerX;
+        py = dx * sin + dy * cos + centerY;
+      }
+      return [px * scaleX + x, py * scaleY + y, quad.subset[corner * 2], quad.subset[corner * 2 + 1]];
+    });
+    this.drawTriangles([points[0], points[1], points[2], points[0], points[2], points[3]], color, texture);
+  }
+
+  /** Untextured quad with corners p0, p1, p2, p3 (IGraphics::CFreeformItem): triangles (0, 1, 3) and (0, 3, 2). */
+  drawFreeform(p0, p1, p2, p3, color) {
+    const point = (p) => [p.x, p.y, 0, 0];
+    this.drawTriangles([point(p0), point(p1), point(p3), point(p0), point(p3), point(p2)], color, null);
+  }
+
+  drawTriangles(points, color, texture) {
+    const rgba = color.map((channel) => colorByte(channel) / 255);
+    const vertices = this.vertices;
+    points.forEach((p, i) => {
+      vertices.set(p, i * PRIMITIVE_STRIDE);
+      vertices.set(rgba, i * PRIMITIVE_STRIDE + 4);
+    });
+    this.graphics.drawPrimitives(vertices, points.length, texture);
+  }
+
+  /**
+   * CPlayers::RenderPlayer() for a tee standing still at `position`, aiming along `direction` (unit vector),
+   * holding `weaponName`. pose: { recoil, hammerAngle, blinking } from Player.pose().
+   */
+  drawPlayer(position, direction, weaponName, pose) {
     const weapon = this.weapons[weaponName];
-    const aimAngle = Math.atan2(direction.y, direction.x);
     const facingLeft = direction.x < 0;
+    const quad = facingLeft ? weapon.flippedQuad : weapon.quad;
 
     // The weapon is drawn behind the tee.
     if (weaponName === 'hammer') {
@@ -143,47 +189,44 @@ export class TeeRenderer {
       const y = position.y + weapon.offsetY;
       const swing = pose.hammerAngle * Math.PI * 2;
       const rotation = facingLeft ? -Math.PI / 2 - swing : -Math.PI / 2 + swing;
-      this.drawSprite(context, view, weapon.image, x, y, weapon.width, weapon.height, rotation, false, facingLeft);
+      this.drawQuad(weapon.texture, quad, x, y, { rotation });
     } else {
-      const reach = weapon.offsetX - pose.recoil * 10;
-      const x = position.x + direction.x * reach;
-      const y = position.y + direction.y * reach + weapon.offsetY;
-      this.drawSprite(context, view, weapon.image, x, y, weapon.width, weapon.height, aimAngle, false, facingLeft);
+      const x = position.x + direction.x * weapon.offsetX - direction.x * pose.recoil * 10;
+      const y = position.y + direction.y * weapon.offsetX - direction.y * pose.recoil * 10 + weapon.offsetY;
+      this.drawQuad(weapon.texture, quad, x, y, { rotation: Math.atan2(direction.y, direction.x) });
     }
 
-    // RenderTee6: outlines first, then the body, the eyes and the feet.
-    const size = 64;
+    // RenderTee6(): outlines first, then the filling. Each pass draws the back foot, the body, the eyes, the front foot.
     const body = { x: position.x, y: position.y - 4 };
-    const backFoot = { x: position.x - 7, y: position.y + 10 };
-    const frontFoot = { x: position.x + 7, y: position.y + 10 };
     for (const outline of [true, false]) {
       const foot = outline ? this.footOutline : this.foot;
-      this.drawSprite(context, view, foot, backFoot.x, backFoot.y, size, size / 2);
-      this.drawSprite(context, view, outline ? this.bodyOutline : this.body, body.x, body.y, size, size);
+      this.drawQuad(foot, FOOT_QUAD, position.x - 7, position.y + 10);
+      this.drawQuad(outline ? this.bodyOutline : this.body, BODY_QUAD, body.x, body.y);
       if (!outline) {
-        const eyeSize = size * 0.4;
-        const eyeHeight = pose.blinking ? size * 0.15 : eyeSize;
-        const eyeSeparation = (0.075 - 0.01 * Math.abs(direction.x)) * size;
-        const eyeX = body.x + direction.x * 0.125 * size;
-        const eyeY = body.y + (-0.05 + direction.y * 0.1) * size;
-        this.drawSprite(context, view, this.eye, eyeX - eyeSeparation, eyeY, eyeSize, eyeHeight);
-        this.drawSprite(context, view, this.eye, eyeX + eyeSeparation, eyeY, eyeSize, eyeHeight, 0, true);
+        const eyeSize = 64 * 0.4;
+        const eyeHeight = pose.blinking ? 64 * 0.15 : eyeSize;
+        const separation = (0.075 - 0.01 * Math.abs(direction.x)) * 64;
+        const eyeX = body.x + direction.x * 0.125 * 64;
+        const eyeY = body.y + (-0.05 + direction.y * 0.1) * 64;
+        const scaleY = eyeHeight / eyeSize;
+        this.drawQuad(this.eye, EYE_QUAD, eyeX - separation, eyeY, { scaleY });
+        this.drawQuad(this.eye, EYE_QUAD, eyeX + separation, eyeY, { scaleX: -1, scaleY });
       }
-      this.drawSprite(context, view, foot, frontFoot.x, frontFoot.y, size, size / 2);
+      this.drawQuad(foot, FOOT_QUAD, position.x + 7, position.y + 10);
     }
   }
 
   /** CPlayers::RenderHook(): hook head at `hookPosition`, chain links every 24 units back to the tee, then the hand. */
-  drawHook(context, view, position, hookPosition) {
+  drawHook(position, hookPosition) {
     const distance = Math.hypot(position.x - hookPosition.x, position.y - hookPosition.y);
     if (distance === 0) return;
     const back = { x: (position.x - hookPosition.x) / distance, y: (position.y - hookPosition.y) / distance };
     const rotation = Math.atan2(back.y, back.x) + Math.PI;
-    this.drawSprite(context, view, this.hookHead, hookPosition.x, hookPosition.y, HOOK_SIZE.width, HOOK_SIZE.height, rotation);
+    this.drawQuad(this.hookHead, HOOK_QUAD, hookPosition.x, hookPosition.y, { rotation });
     for (let step = 24; step < distance; step += 24) {
-      const x = hookPosition.x + back.x * step;
-      const y = hookPosition.y + back.y * step;
-      this.drawSprite(context, view, this.hookChain, x, y, HOOK_SIZE.width, HOOK_SIZE.height, rotation);
+      this.drawQuad(this.hookChain, HOOK_QUAD, hookPosition.x + back.x * step, hookPosition.y + back.y * step, {
+        rotation,
+      });
     }
 
     // RenderHand(): angle offset −π/2, then 20 units along the hook direction
@@ -192,50 +235,45 @@ export class TeeRenderer {
     const handRotation = toward.x < 0 ? aim + Math.PI / 2 : aim - Math.PI / 2;
     const handX = position.x + toward.x + toward.x * 20;
     const handY = position.y + toward.y + toward.y * 20;
-    this.drawSprite(context, view, this.handOutline, handX, handY, HAND_SIZE, HAND_SIZE, handRotation);
-    this.drawSprite(context, view, this.hand, handX, handY, HAND_SIZE, HAND_SIZE, handRotation);
+    this.drawQuad(this.handOutline, HAND_QUAD, handX, handY, { rotation: handRotation });
+    this.drawQuad(this.hand, HAND_QUAD, handX, handY, { rotation: handRotation });
   }
 
   /**
-   * CItems::RenderLaser for a rifle laser: a body from `from` to `to`, `width` from 1 (just fired) to 0,
-   * and a rotating splat at the end. `ticks` is the current game time in ticks.
+   * CItems::RenderLaser() for a rifle laser: a body from `from` to `to`, `width` from 1 (just fired) to 0,
+   * and a turning splat at the end. `ticks` is the current game time in ticks.
    */
-  drawLaser(context, view, from, to, width, ticks) {
+  drawLaser(from, to, width, ticks) {
     const length = Math.hypot(to.x - from.x, to.y - from.y);
-    if (length > 0 && width > 0) {
+    if (length > 0) {
       const direction = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
-      const toCanvas = (x, y) => [view.originX + x * view.scale, view.originY + y * view.scale];
-      const drawQuad = (halfWidth, inset, rgb) => {
-        const normalX = direction.y * halfWidth;
-        const normalY = -direction.x * halfWidth;
-        const insetX = direction.x * inset;
-        const insetY = direction.y * inset;
-        context.beginPath();
-        context.moveTo(...toCanvas(from.x - normalX + insetX, from.y - normalY + insetY));
-        context.lineTo(...toCanvas(from.x + normalX + insetX, from.y + normalY + insetY));
-        context.lineTo(...toCanvas(to.x + normalX - insetX, to.y + normalY - insetY));
-        context.lineTo(...toCanvas(to.x - normalX - insetX, to.y - normalY - insetY));
-        context.closePath();
-        context.fillStyle = cssColor(rgb);
-        context.fill();
-      };
-      drawQuad(7 * width, 0, this.laserOutline);
-      drawQuad(5 * width, 1, this.laserInner);
+      const side = (halfWidth) => ({ x: direction.y * halfWidth, y: -direction.x * halfWidth });
+      const plus = (a, b) => ({ x: a.x + b.x, y: a.y + b.y });
+      const minus = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
+
+      let out = side(7 * width);
+      this.drawFreeform(minus(from, out), plus(from, out), minus(to, out), plus(to, out), [...this.laserOutline, 1]);
+
+      out = side(5 * width);
+      const start = plus(from, direction);
+      const end = minus(to, direction);
+      this.drawFreeform(minus(start, out), plus(start, out), minus(end, out), plus(end, out), [...this.laserInner, 1]);
     }
 
     const tick = Math.trunc(ticks);
-    const splat = tick % 3;
-    this.drawSprite(context, view, this.splatsOutline[splat], to.x, to.y, 24, 24, tick);
-    this.drawSprite(context, view, this.splatsInner[splat], to.x, to.y, 20, 20, tick);
+    const splat = this.splats[tick % 3];
+    this.drawQuad(splat, SPLAT_QUAD, to.x, to.y, { rotation: tick, color: [...this.laserOutline, 1] });
+    this.drawQuad(splat, SPLAT_QUAD, to.x, to.y, {
+      rotation: tick,
+      scaleX: 20 / 24,
+      scaleY: 20 / 24,
+      color: [...this.laserInner, 1],
+    });
   }
 
-  /**
-   * The cursor is part of the HUD: it is drawn at zoom 1 around the screen center.
-   * `center` is in canvas pixels, `offset` in units, `scale` in pixels per unit.
-   */
-  drawCursor(context, center, offset, scale, weaponName) {
+  /** CHud::RenderCursor(): the weapon's cursor at `target` (world position, in a screen mapped at zoom 1). */
+  drawCursor(target, weaponName) {
     const weapon = this.weapons[weaponName];
-    const size = weapon.cursorSize * scale;
-    context.drawImage(weapon.cursor, center.x + offset.x * scale - size / 2, center.y + offset.y * scale - size / 2, size, size);
+    this.drawQuad(weapon.cursor, weapon.cursorQuad, target.x, target.y);
   }
 }

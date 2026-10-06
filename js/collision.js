@@ -38,21 +38,17 @@ export class CollisionMap {
     this.tiles = tiles;
   }
 
-  /** Reads an image with one pixel per tile: white = TILE_SOLID, grey = TILE_NOHOOK, black = empty. */
-  static fromImage(image) {
-    const canvas = document.createElement('canvas');
-    canvas.width = image.width;
-    canvas.height = image.height;
-    const context = canvas.getContext('2d');
-    context.drawImage(image, 0, 0);
-    const pixels = context.getImageData(0, 0, image.width, image.height).data;
-
-    const tiles = new Uint8Array(image.width * image.height);
+  /**
+   * Builds the collision from the game layer of a map (see readMap()).
+   * Like CCollision::IsSolid(), only TILE_SOLID and TILE_NOHOOK block; other game tiles count as empty.
+   */
+  static fromGameLayer(layer) {
+    const tiles = new Uint8Array(layer.width * layer.height);
     for (let i = 0; i < tiles.length; i++) {
-      const value = pixels[i * 4];
-      tiles[i] = value > 191 ? TILE_SOLID : value > 63 ? TILE_NOHOOK : TILE_EMPTY;
+      const index = layer.tiles[i * 4];
+      tiles[i] = index === TILE_SOLID || index === TILE_NOHOOK ? index : TILE_EMPTY;
     }
-    return new CollisionMap(image.width, image.height, tiles);
+    return new CollisionMap(layer.width, layer.height, tiles);
   }
 
   /** CCollision::GetTile() for integer coordinates. Outside the map, the nearest border tile counts. */

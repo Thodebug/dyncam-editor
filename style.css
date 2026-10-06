@@ -580,6 +580,7 @@ textarea::placeholder {
   background: rgba(255, 255, 255, 0.25);
 }
 
+.loading-detail[hidden],
 .loading-bar[hidden] {
   display: none;
 }

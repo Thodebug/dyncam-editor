@@ -1,33 +1,18 @@
-import { CAMERA_MAX_DISTANCE, CameraSmoothing, cameraOffsetAt, cursorFromMouse, cursorLimits } from './camera.js';
+import { CameraSmoothing, cameraOffsetAt, cursorFromMouse, cursorLimits } from './camera.js';
+import { PRIMITIVE_STRIDE } from './graphics.js';
+import { calcScreenParams, mapScreenToWorld } from './map-renderer.js';
 import { gameTick } from './player.js';
 
-/**
- * Visible world size at zoom 1 for a screen aspect ratio (width / height),
- * from IGraphics::CalcScreenParams().
- */
+/** Visible world size at zoom 1 for a screen aspect ratio (width / height), from IGraphics::CalcScreenParams(). */
 export function screenSize(aspect) {
-  const amount = 1150 * 1000;
-  const maxWidth = 1500;
-  const maxHeight = 1050;
-  let height = Math.sqrt(amount) / Math.sqrt(aspect);
-  let width = height * aspect;
-  if (width > maxWidth) {
-    width = maxWidth;
-    height = width / aspect;
-  }
-  if (height > maxHeight) {
-    height = maxHeight;
-    width = height * aspect;
-  }
-  return { width, height };
+  return calcScreenParams(aspect, 1);
 }
 
-/**
- * Screen formats the map images fully cover. Other formats need taller captures.
- * The aspect ratio is the window width / height in pixels, as in IGraphics::ScreenAspect().
- */
+/** Screen formats, with the aspect ratio of the window width / height in pixels, as in IGraphics::ScreenAspect(). */
 export const SCREEN_FORMATS = [
   { id: '16:9', label: '16:9', aspect: 16 / 9 },
+  { id: '16:10', label: '16:10', aspect: 16 / 10 },
+  { id: '4:3', label: '4:3', aspect: 4 / 3 },
   { id: '21:9', label: '21:9 (2560×1080)', aspect: 2560 / 1080 },
   { id: '21:9-wide', label: '21:9 (3440×1440)', aspect: 3440 / 1440 },
 ];
@@ -36,84 +21,18 @@ export const SCREEN_FORMATS = [
 export const TEE_POSITION = { x: 5200, y: 1777 };
 
 /**
- * The map layers are screenshots of the game on a 16:9 screen, taken with the camera at CAPTURE_CAMERA
- * and a zoom of CAPTURE_ZOOM, one image per group of layers. Each image is drawn with the parallax of its group.
- * bounds: box of the non-transparent pixels of the image, [left, top, right, bottom] in image pixels,
- * right and bottom excluded.
+ * The game view as DDNet renders it: map, laser, hook, tee, map foreground and cursor, drawn with WebGL.
+ * The distance circles and the help text are drawn on 2D canvases and shown over the game as textures.
  */
-const CAPTURE_SCREEN = screenSize(16 / 9);
-const CAPTURE_CAMERA = { x: 5200, y: 1776 };
-const CAPTURE_ZOOM = Math.pow(0.866025, -3);
-const LAYERS_BEHIND = [
-  { name: 'clouds-far', parallaxX: 49, parallaxY: 51, bounds: [10, 0, 2540, 1440] },
-  { name: 'clouds-near', parallaxX: 70, parallaxY: 70, bounds: [0, 321, 2560, 786] },
-  { name: 'cave', parallaxX: 96, parallaxY: 96, bounds: [0, 142, 2560, 1440] },
-  { name: 'background', parallaxX: 100, parallaxY: 100, bounds: [405, 188, 2560, 1440] },
-];
-const LAYERS_IN_FRONT = [{ name: 'foreground', parallaxX: 100, parallaxY: 100, bounds: [0, 0, 2560, 1440] }];
-
-/**
- * Sky of ctf5: one quad with a color per corner, in a group with a parallax of 0.
- * The GPU draws it as the triangles (0, 1, 3) and (0, 3, 2) with linearly interpolated colors.
- */
-const SKY_CORNERS = [
-  { x: -1045.52734375, y: -773.134765625, color: [106, 106, 106] },
-  { x: 1069.373046875, y: -773.134765625, color: [106, 106, 106] },
-  { x: -1045.52734375, y: 943.1611328125, color: [59, 73, 130] },
-  { x: 1069.373046875, y: 943.1611328125, color: [67, 69, 100] },
-];
-const SKY_TRIANGLES = [
-  [0, 1, 3],
-  [0, 3, 2],
-];
-
-/** Draws the sky quad for a view of `viewWidth` × `viewHeight` units centered on (0, 0). */
-function renderSky(width, height, viewWidth, viewHeight) {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d');
-  const image = context.createImageData(width, height);
-  const pixels = image.data;
-
-  for (let row = 0; row < height; row++) {
-    const y = ((row + 0.5) / height) * viewHeight - viewHeight / 2;
-    for (let column = 0; column < width; column++) {
-      const x = ((column + 0.5) / width) * viewWidth - viewWidth / 2;
-      for (const [i, j, k] of SKY_TRIANGLES) {
-        const a = SKY_CORNERS[i];
-        const b = SKY_CORNERS[j];
-        const c = SKY_CORNERS[k];
-        const area = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y);
-        const weightA = ((b.y - c.y) * (x - c.x) + (c.x - b.x) * (y - c.y)) / area;
-        const weightB = ((c.y - a.y) * (x - c.x) + (a.x - c.x) * (y - c.y)) / area;
-        const weightC = 1 - weightA - weightB;
-        if (weightA < -1e-9 || weightB < -1e-9 || weightC < -1e-9) continue;
-        const offset = (row * width + column) * 4;
-        for (let channel = 0; channel < 3; channel++) {
-          pixels[offset + channel] = Math.round(
-            weightA * a.color[channel] + weightB * b.color[channel] + weightC * c.color[channel],
-          );
-        }
-        pixels[offset + 3] = 255;
-        break;
-      }
-    }
-  }
-  context.putImageData(image, 0, 0);
-  return canvas;
-}
-
-/** Canvas showing the game as DDNet renders it: map, tee, laser, hook, cursor and distance circles. */
 export class GameView {
   /**
-   * images: map layers by name, renderer: TeeRenderer, store: ConfigStore,
+   * graphics: Graphics, map: MapRenderer, renderer: TeeRenderer, store: ConfigStore,
    * pointer: PointerInput, player: Player
    */
-  constructor({ canvas, images, renderer, store, pointer, player }) {
+  constructor({ canvas, graphics, map, renderer, store, pointer, player }) {
     this.canvas = canvas;
-    this.context = canvas.getContext('2d');
-    this.images = images;
+    this.graphics = graphics;
+    this.map = map;
     this.renderer = renderer;
     this.store = store;
     this.pointer = pointer;
@@ -128,15 +47,28 @@ export class GameView {
     this.screen = screenSize(this.aspect);
     this.pixelRatio = 1;
     this.scale = 1;
-    this.scaledLayers = null;
-    this.scalingInSteps = false;
-    this.ringCache = null;
+    this.overlays = {};
+    this.overlayVertices = new Float32Array(6 * PRIMITIVE_STRIDE);
     this.frameRequest = 0;
     this.blinkTimer = 0;
+    this.contextLost = false;
 
     const style = getComputedStyle(document.documentElement);
     this.font = style.getPropertyValue('--font').trim();
     this.colorOf = (variable) => style.getPropertyValue(variable).trim();
+
+    canvas.addEventListener('webglcontextlost', (event) => {
+      event.preventDefault();
+      this.contextLost = true;
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      this.graphics.init();
+      this.map.upload();
+      this.renderer.upload();
+      this.overlays = {};
+      this.contextLost = false;
+      this.requestRender();
+    });
   }
 
   requestRender() {
@@ -157,106 +89,18 @@ export class GameView {
     this.pixelRatio = window.devicePixelRatio || 1;
     const width = Math.max(1, Math.round(box.width * this.pixelRatio));
     const height = Math.max(1, Math.round((box.width / this.aspect) * this.pixelRatio));
-    if (width === this.canvas.width && height === this.canvas.height && this.scaledLayers) return;
-    this.canvas.width = width;
-    this.canvas.height = height;
-    this.scaledLayers = null;
-    this.ringCache = null;
+    if (width !== this.canvas.width || height !== this.canvas.height) {
+      this.canvas.width = width;
+      this.canvas.height = height;
+    }
     this.requestRender();
-  }
-
-  /** Number of steps of scaleLayerSteps(). */
-  get scaleStepCount() {
-    return 1 + LAYERS_BEHIND.length + LAYERS_IN_FRONT.length;
-  }
-
-  scaleLayers() {
-    const steps = this.scaleLayerSteps();
-    while (!steps.next().done);
-  }
-
-  /** Runs scaleLayers() one step at a time, giving the browser a frame between steps. onProgress(done, total) */
-  async scaleLayersInSteps(onProgress) {
-    this.scalingInSteps = true;
-    let done = 0;
-    for (const _ of this.scaleLayerSteps()) {
-      onProgress(++done, this.scaleStepCount);
-      await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)));
-    }
-    this.scalingInSteps = false;
-  }
-
-  /**
-   * Prepares the sky and resamples each layer once for the current canvas size, so frames only copy pixels.
-   * Each resampled layer keeps only the part that can appear on screen: its non-transparent pixels, within
-   * the area the camera can reach (the camera offset never exceeds CAMERA_MAX_DISTANCE).
-   * Yields after the sky and after each layer.
-   */
-  *scaleLayerSteps() {
-    const { width, height } = this.canvas;
-    const scaleX = width / this.screen.width;
-    const scaleY = height / this.screen.height;
-    const layers = { sky: { canvas: renderSky(width, height, this.screen.width, this.screen.height), left: 0, top: 0 } };
-    yield;
-
-    for (const layer of [...LAYERS_BEHIND, ...LAYERS_IN_FRONT]) {
-      const image = this.images[layer.name];
-      // IGraphics::MapScreenToWorld(): a layer with parallax p shows (p × (zoom − 1) + 100) / 100 times the zoom 1 view.
-      const parallax = Math.min(Math.max(layer.parallaxX, layer.parallaxY), 100);
-      const factor = (parallax * (CAPTURE_ZOOM - 1) + 100) / 100;
-      const fullWidth = Math.max(1, Math.round(CAPTURE_SCREEN.width * factor * scaleX));
-      const fullHeight = Math.max(1, Math.round(CAPTURE_SCREEN.height * factor * scaleY));
-
-      // Reachable area, in pixels of the resampled layer, with 2 pixels of margin for rounding
-      const reachX = (CAMERA_MAX_DISTANCE + Math.abs(TEE_POSITION.x - CAPTURE_CAMERA.x)) * (layer.parallaxX / 100) * scaleX;
-      const reachY = (CAMERA_MAX_DISTANCE + Math.abs(TEE_POSITION.y - CAPTURE_CAMERA.y)) * (layer.parallaxY / 100) * scaleY;
-      // Non-transparent pixels, with 2 source pixels of margin for the resampling filter
-      const [boundsLeft, boundsTop, boundsRight, boundsBottom] = layer.bounds;
-      const ratioX = fullWidth / image.width;
-      const ratioY = fullHeight / image.height;
-
-      const left = Math.max(0, Math.floor(fullWidth / 2 - width / 2 - reachX - 2), Math.floor((boundsLeft - 2) * ratioX));
-      const right = Math.min(fullWidth, Math.ceil(fullWidth / 2 + width / 2 + reachX + 2), Math.ceil((boundsRight + 2) * ratioX));
-      const top = Math.max(0, Math.floor(fullHeight / 2 - height / 2 - reachY - 2), Math.floor((boundsTop - 2) * ratioY));
-      const bottom = Math.min(fullHeight, Math.ceil(fullHeight / 2 + height / 2 + reachY + 2), Math.ceil((boundsBottom + 2) * ratioY));
-      if (right <= left || bottom <= top) {
-        yield;
-        continue;
-      }
-
-      const full = document.createElement('canvas');
-      full.width = fullWidth;
-      full.height = fullHeight;
-      const fullContext = full.getContext('2d');
-      fullContext.imageSmoothingEnabled = true;
-      fullContext.imageSmoothingQuality = 'high';
-      fullContext.drawImage(image, 0, 0, fullWidth, fullHeight);
-
-      const kept = document.createElement('canvas');
-      kept.width = right - left;
-      kept.height = bottom - top;
-      kept.getContext('2d').drawImage(full, -left, -top);
-      layers[layer.name] = { canvas: kept, left, top, fullWidth, fullHeight };
-      yield;
-    }
-    this.scaledLayers = layers;
-  }
-
-  /** Draws a layer for a camera at `camera` units from CAPTURE_CAMERA. */
-  drawLayer(layer, camera) {
-    const scaled = this.scaledLayers[layer.name];
-    if (!scaled) return;
-    const { width, height } = this.canvas;
-    const x = width / 2 - scaled.fullWidth / 2 - ((camera.x * layer.parallaxX) / 100) * (width / this.screen.width);
-    const y = height / 2 - scaled.fullHeight / 2 - ((camera.y * layer.parallaxY) / 100) * (height / this.screen.height);
-    this.context.drawImage(scaled.canvas, Math.round(x) + scaled.left, Math.round(y) + scaled.top);
   }
 
   render({ hideHint = false } = {}) {
     this.frameRequest = 0;
-    const context = this.context;
     const { width, height } = this.canvas;
-    if (!width || !height || this.scalingInSteps) return;
+    if (!width || !height || this.contextLost) return;
+    const graphics = this.graphics;
 
     const now = performance.now();
     const limits = cursorLimits(this.store.values, this.store.dyncam);
@@ -271,47 +115,43 @@ export class GameView {
     this.scale = width / this.screen.width;
     this.onFrame?.({ cursor, limits, offset });
 
-    if (!this.scaledLayers) this.scaleLayers();
+    graphics.setViewport(width, height);
+    graphics.setBlend('normal');
+    graphics.clear(0, 0, 0);
 
-    // Map behind the tee
-    const layerCamera = {
-      x: offset.x + TEE_POSITION.x - CAPTURE_CAMERA.x,
-      y: offset.y + TEE_POSITION.y - CAPTURE_CAMERA.y,
-    };
-    context.drawImage(this.scaledLayers.sky.canvas, 0, 0);
-    for (const layer of LAYERS_BEHIND) this.drawLayer(layer, layerCamera);
+    // Map behind the players, then the laser, the hook and the tee, then the map in front (CGameClient::OnRender order)
+    const center = { x: TEE_POSITION.x + offset.x, y: TEE_POSITION.y + offset.y };
+    this.map.render('background', center, this.aspect);
 
-    // Items, then the player, as in the game
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = 'high';
-    const view = {
-      scale: this.scale,
-      originX: width / 2 - (TEE_POSITION.x + offset.x) * this.scale,
-      originY: height / 2 - (TEE_POSITION.y + offset.y) * this.scale,
-    };
+    const world = mapScreenToWorld(center.x, center.y, 100, 100, 100, 0, 0, this.aspect, 1);
+    graphics.mapScreen(world.left, world.top, world.right, world.bottom);
     const tick = gameTick(now);
     this.player.update(now, cursor.position);
     for (const segment of this.player.laser.visibleSegments(tick)) {
-      this.renderer.drawLaser(context, view, segment.from, segment.to, segment.width, tick);
+      this.renderer.drawLaser(segment.from, segment.to, segment.width, tick);
     }
     const hookPosition = this.player.hook.positionAt(tick);
-    if (hookPosition) this.renderer.drawHook(context, view, TEE_POSITION, hookPosition);
-    const pose = this.player.pose(now);
-    this.renderer.drawPlayer(context, view, TEE_POSITION, cursor.direction, this.player.weapon, pose);
+    if (hookPosition) this.renderer.drawHook(TEE_POSITION, hookPosition);
+    this.renderer.drawPlayer(TEE_POSITION, cursor.direction, this.player.weapon, this.player.pose(now));
 
-    // Map in front of the tee
-    for (const layer of LAYERS_IN_FRONT) this.drawLayer(layer, layerCamera);
+    this.map.render('foreground', center, this.aspect);
 
     // Distance circles around the tee, all of them or the one of the hovered setting
+    graphics.mapScreen(0, 0, width, height);
     const teeOnCanvas = { x: width / 2 - offset.x * this.scale, y: height / 2 - offset.y * this.scale };
     if (this.showDistances) this.drawRings(limits, teeOnCanvas, null);
     else if (this.focusedSetting) this.drawRings(limits, teeOnCanvas, this.focusedSetting);
 
-    const cursorOffset = { x: cursor.position.x - offset.x, y: cursor.position.y - offset.y };
-    this.renderer.drawCursor(context, { x: width / 2, y: height / 2 }, cursorOffset, this.scale, this.player.weapon);
+    // The cursor is part of the HUD, drawn at zoom 1 (CHud::RenderCursor())
+    graphics.mapScreen(world.left, world.top, world.right, world.bottom);
+    const target = { x: TEE_POSITION.x + cursor.position.x, y: TEE_POSITION.y + cursor.position.y };
+    this.renderer.drawCursor(target, this.player.weapon);
 
     const hint = hideHint ? '' : this.pointer.hint();
-    if (hint) this.drawHint(hint);
+    if (hint) {
+      graphics.mapScreen(0, 0, width, height);
+      this.drawHint(hint);
+    }
 
     if (cameraMoving || this.player.isAnimating(now)) {
       this.requestRender();
@@ -322,22 +162,71 @@ export class GameView {
     }
   }
 
+  /* ---------- Drawings over the game ---------- */
+
+  /**
+   * A 2D canvas of `width` × `height` pixels shown as a texture, drawn by draw(context) again only when `key` changes.
+   */
+  overlay(name, key, width, height, draw) {
+    let overlay = this.overlays[name];
+    if (overlay?.key === key) return overlay;
+    const canvas = overlay?.canvas ?? document.createElement('canvas');
+    canvas.width = Math.max(1, Math.ceil(width));
+    canvas.height = Math.max(1, Math.ceil(height));
+    const context = canvas.getContext('2d');
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    draw(context);
+    if (overlay) {
+      this.graphics.updateTexture(overlay.texture, canvas, { premultiplied: true });
+    } else {
+      overlay = { canvas, texture: this.graphics.createTexture(canvas, { mipmaps: false, premultiplied: true }) };
+      this.overlays[name] = overlay;
+    }
+    overlay.key = key;
+    return overlay;
+  }
+
+  /** Draws an overlay with its top left corner at canvas pixel (x, y), in a screen mapped to canvas pixels. */
+  drawOverlay(overlay, x, y) {
+    const left = Math.round(x);
+    const top = Math.round(y);
+    const right = left + overlay.canvas.width;
+    const bottom = top + overlay.canvas.height;
+    const corners = [
+      [left, top, 0, 0],
+      [right, top, 1, 0],
+      [right, bottom, 1, 1],
+      [left, bottom, 0, 1],
+    ];
+    const vertices = this.overlayVertices;
+    [0, 1, 2, 0, 2, 3].forEach((corner, i) => {
+      vertices.set(corners[corner], i * PRIMITIVE_STRIDE);
+      vertices.set([1, 1, 1, 1], i * PRIMITIVE_STRIDE + 4);
+    });
+    this.graphics.setBlend('premultiplied');
+    this.graphics.drawPrimitives(vertices, 6, overlay.texture);
+    this.graphics.setBlend('normal');
+  }
+
   drawHint(text) {
-    const context = this.context;
-    const { width, height } = this.canvas;
     const ratio = this.pixelRatio;
-    context.save();
-    context.font = `${14 * ratio}px ${this.font}`;
-    context.textAlign = 'center';
-    context.textBaseline = 'middle';
-    const boxWidth = context.measureText(text).width + 24 * ratio;
-    context.fillStyle = 'rgba(51, 51, 51, 0.8)';
-    context.beginPath();
-    context.roundRect(width / 2 - boxWidth / 2, height * 0.82 - 14 * ratio, boxWidth, 28 * ratio, 8 * ratio);
-    context.fill();
-    context.fillStyle = '#fff';
-    context.fillText(text, width / 2, height * 0.82);
-    context.restore();
+    const font = `${14 * ratio}px ${this.font}`;
+    this.measureContext ??= document.createElement('canvas').getContext('2d');
+    this.measureContext.font = font;
+    const boxWidth = Math.ceil(this.measureContext.measureText(text).width + 24 * ratio);
+    const boxHeight = Math.ceil(28 * ratio);
+    const overlay = this.overlay('hint', JSON.stringify([text, ratio, this.font]), boxWidth, boxHeight, (context) => {
+      context.fillStyle = 'rgba(51, 51, 51, 0.8)';
+      context.beginPath();
+      context.roundRect(0, 0, boxWidth, boxHeight, 8 * ratio);
+      context.fill();
+      context.font = font;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillStyle = '#fff';
+      context.fillText(text, boxWidth / 2, boxHeight / 2);
+    });
+    this.drawOverlay(overlay, this.canvas.width / 2 - boxWidth / 2, this.canvas.height * 0.82 - boxHeight / 2);
   }
 
   /* ---------- Distance circles ---------- */
@@ -411,7 +300,7 @@ export class GameView {
   /**
    * Draws the circles centered on the tee. Labels go above a circle, or below when there is no room,
    * and are skipped when they would overlap another label.
-   * The circles are drawn once into a cached canvas and reused while nothing changes.
+   * The circles are drawn on a canvas that is reused while nothing changes.
    */
   drawRings(limits, center, onlySetting) {
     let rings = this.rings(limits);
@@ -436,20 +325,15 @@ export class GameView {
         return { ring, side };
       });
 
-    const cacheKey = JSON.stringify([
-      labelled.map(({ ring, side }) => [ring.radius, ring.label, side, ring.faint, ring.dotted]),
+    const key = JSON.stringify([
+      labelled.map(({ ring, side }) => [ring.radius, ring.label, side, ring.faint, ring.dotted, ring.color]),
       this.scale,
       ratio,
       this.font,
     ]);
-    if (this.ringCache?.key !== cacheKey) {
-      const outerRadius = Math.max(...rings.map((ring) => ring.radius)) * this.scale + 30 * ratio;
-      const size = Math.ceil(outerRadius * 2);
-      const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = size;
-      const context = canvas.getContext('2d');
-      const middle = size / 2;
-
+    const size = Math.ceil((Math.max(...rings.map((ring) => ring.radius)) * this.scale + 30 * ratio) * 2);
+    const middle = size / 2;
+    const overlay = this.overlay('rings', key, size, size, (context) => {
       for (const ring of rings) {
         context.save();
         context.globalAlpha = ring.faint ? 0.6 : 1;
@@ -473,27 +357,26 @@ export class GameView {
         this.drawArcLabel(context, ring.label, middle, ring.radius * this.scale + 4 * ratio, ring.color, side === 'top');
         context.restore();
       }
-      this.ringCache = { key: cacheKey, canvas, middle };
-    }
-
-    this.context.drawImage(this.ringCache.canvas, Math.round(center.x - this.ringCache.middle), Math.round(center.y - this.ringCache.middle));
+    });
+    this.drawOverlay(overlay, center.x - middle, center.y - middle);
 
     // Cross at the screen center: where the camera looks
     if (!onlySetting) {
-      const context = this.context;
       const arm = 7 * ratio;
-      const middleX = this.canvas.width / 2;
-      const middleY = this.canvas.height / 2;
-      context.save();
-      context.lineWidth = 2 * ratio;
-      context.strokeStyle = this.colorOf('--ring-camera-offset');
-      context.beginPath();
-      context.moveTo(middleX - arm, middleY);
-      context.lineTo(middleX + arm, middleY);
-      context.moveTo(middleX, middleY - arm);
-      context.lineTo(middleX, middleY + arm);
-      context.stroke();
-      context.restore();
+      const crossSize = Math.ceil(arm * 2 + 4 * ratio);
+      const color = this.colorOf('--ring-camera-offset');
+      const cross = this.overlay('cross', JSON.stringify([ratio, color]), crossSize, crossSize, (context) => {
+        const half = crossSize / 2;
+        context.lineWidth = 2 * ratio;
+        context.strokeStyle = color;
+        context.beginPath();
+        context.moveTo(half - arm, half);
+        context.lineTo(half + arm, half);
+        context.moveTo(half, half - arm);
+        context.lineTo(half, half + arm);
+        context.stroke();
+      });
+      this.drawOverlay(cross, this.canvas.width / 2 - crossSize / 2, this.canvas.height / 2 - crossSize / 2);
     }
   }
 

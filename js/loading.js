@@ -1,7 +1,8 @@
 /** Map name shown while loading, as in DDNet's "Downloading map: <name>". */
 const MAP_NAME = 'ctf5';
 
-async function imageFromBlob(blob) {
+/** Decodes an image file. */
+export async function imageFromBlob(blob) {
   const url = URL.createObjectURL(blob);
   const image = new Image();
   image.src = url;
@@ -14,11 +15,11 @@ async function imageFromBlob(blob) {
 }
 
 /**
- * Downloads and decodes images. urls: { key: url }. Returns { key: image }.
+ * Downloads files. urls: { key: url }. Returns { key: Blob }.
  * onProgress({ loaded, total, filesDone, fileCount }) is called as bytes arrive.
  * total is null when a size is unknown (no Content-Length, or a compressed response).
  */
-export async function downloadImages(urls, onProgress) {
+export async function downloadFiles(urls, onProgress) {
   const entries = Object.entries(urls);
   const responses = await Promise.all(entries.map(([, url]) => fetch(url)));
   for (const response of responses) {
@@ -53,8 +54,7 @@ export async function downloadImages(urls, onProgress) {
     }),
   );
 
-  const images = await Promise.all(blobs.map(imageFromBlob));
-  return Object.fromEntries(entries.map(([key], index) => [key, images[index]]));
+  return Object.fromEntries(entries.map(([key], index) => [key, blobs[index]]));
 }
 
 /**
@@ -65,14 +65,17 @@ export class LoadingScreen {
   constructor(element) {
     this.element = element;
     this.title = element.querySelector('.loading-title');
-    this.detail = element.querySelector('.loading-detail');
+    [this.detail, this.secondDetail] = element.querySelectorAll('.loading-detail');
     this.bar = element.querySelector('.loading-bar');
     this.startTime = performance.now();
   }
 
-  show(title, detail, progress) {
+  /** A title, one or two lines of detail, and a progress bar from 0 to 1 (none when null). */
+  show(title, detail, progress, secondDetail = '') {
     this.title.textContent = title;
     this.detail.textContent = detail;
+    this.secondDetail.textContent = secondDetail;
+    this.secondDetail.hidden = !secondDetail;
     this.bar.hidden = progress === null;
     if (progress !== null) this.bar.style.setProperty('--progress', String(Math.min(Math.max(progress, 0), 1)));
   }
@@ -99,9 +102,9 @@ export class LoadingScreen {
     this.show('Connected', 'Loading map file from storage', done / total);
   }
 
-  showError() {
+  showError(detail = 'The map could not be loaded.', secondDetail = 'Reload the page to try again.') {
     this.element.classList.add('is-error');
-    this.show('Error', 'The map could not be loaded. Reload the page to try again.', null);
+    this.show('Error', detail, null, secondDetail);
   }
 
   hide() {

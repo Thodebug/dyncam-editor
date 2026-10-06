@@ -10,8 +10,9 @@ This editor shows what each value does, on the ctf5 map, exactly as the game dra
 
 ## Features
 
-- The real game view: ctf5 layers with their parallax, the default tee, its weapon and the cursor,
-  at zoom 1, on a 16:9 or 21:9 screen.
+- The real game view: the ctf5 map file drawn with WebGL like the DDNet client draws it (same shaders, texture
+  filtering, parallax and layer order), the default tee, its weapon and the cursor, at zoom 1,
+  on a 16:9, 16:10, 4:3 or 21:9 screen.
 - Every `cl_dyncam_*` and `cl_mouse_*` setting, with the game's ranges, defaults and descriptions.
 - The `cl_dyncam` switch shows either camera mode, `cl_dyncam 1` or `cl_dyncam 0`.
 - Camera smoothing (`cl_dyncam_smoothness`, `cl_dyncam_stabilizing`) computed like the game.
@@ -33,7 +34,7 @@ Press F1 to open the console, paste with Ctrl+V, then press Enter. DDNet saves t
 
 ## Run locally
 
-The page uses JavaScript modules and reads image pixels, so browsers do not run it from a file opened directly.
+The page uses JavaScript modules and loads its files with `fetch`, so browsers do not run it from a file opened directly.
 Serve the folder with any static web server, for example:
 
 ```sh
@@ -49,6 +50,10 @@ index.html              page structure
 style.css               DDNet menu look and page layout
 js/
   main.js               loads the assets and connects the modules
+  loading.js            downloads with progress, loading screen
+  map-file.js           reader for DDNet .map files
+  graphics.js           WebGL 2 drawing with the state and shaders of the DDNet client
+  map-renderer.js       tile and quad layers with their parallax
   settings.js           list of console variables (ranges, defaults, descriptions)
   config-store.js       current values, commands, share link, browser storage
   camera.js             cursor limits and camera smoothing
@@ -57,15 +62,16 @@ js/
   laser.js              laser path and timing
   hook.js               hook flight, grab and retraction
   tee-renderer.js       tee, weapon, hook, laser and cursor sprites
-  game-view.js          game view canvas: layers, parallax, distance circles
+  game-view.js          game view: draw order, camera, distance circles
   pointer.js            aiming, mouse capture, buttons and wheel
   settings-panel.js     setting rows and their notes
   commands-panel.js     commands list, copy, share, paste, reset
   snapshot.js           image of the view with the commands
   tooltip.js            tooltips
 assets/
-  map/                  ctf5 layers and collision
-  sprites/              tee skin, weapons, particles
+  map/                  ctf5.map
+  mapres/               images used by ctf5 (data/mapres of DDNet)
+  sprites/              tee skin, weapons, particles, menu background fade
   fonts/                DejaVu Sans and icons
 ```
 
@@ -73,9 +79,8 @@ The formulas follow the DDNet source code. Comments in the code name the DDNet f
 
 ## Limits
 
-- One map (ctf5) and zoom 1. Screen formats: 16:9 and 21:9. Taller formats (16:10, 4:3, 5:4) need new captures.
-- The map images were captured at a zoom of 1.54 and are enlarged to zoom 1, so they are slightly softer
-  than in game.
+- One map (ctf5) and zoom 1.
+- The view needs WebGL 2. The GPU and its driver can change a few pixels, as between two computers in game.
 - When the hook grabs the ground, the game pulls the tee toward it. Here the tee stays in place.
 - The laser and hook use the classic fng tuning: laser reach 800 with one bounce, hook length 380.
 
