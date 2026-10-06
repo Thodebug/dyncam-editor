@@ -11,6 +11,7 @@ The cursor, camera, collision, laser and rendering logic in `js/` is a JavaScrip
 - `src/game/collision.cpp`: line intersection and point movement
 - `src/game/server/entities/laser.cpp`: laser bounces
 - `src/game/client/render.cpp`, `components/players.cpp`, `components/items.cpp`, `components/hud.cpp`: tee, hook, laser and cursor rendering
+- `src/game/client/components/menus.cpp`, `src/game/client/ui.cpp`: loading screen, menu background and progress bar
 - `src/engine/shared/config_variables.h`: ranges, defaults and descriptions of the console variables
 
 Teeworlds Copyright (C) 2007-2014 Magnus Auvinen,
@@ -24,6 +25,7 @@ Licensed under the [zlib license](https://github.com/ddnet/ddnet/blob/master/lic
 |---|---|---|
 | `assets/map/*.webp`, `assets/map/collision.png` | Rendered from the map `data/maps/ctf5.map` of Teeworlds / DDNet | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
 | `assets/sprites/game.png`, `assets/sprites/particles.png` | `data/game.png` and `data/particles.png` of DDNet | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
+| `assets/sprites/blob.png` | `data/blob.png` of DDNet, resized to 128×128 | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
 | `assets/sprites/skin-default.png` | `data/skins/default.png` of DDNet, Copyright Magnus Auvinen | zlib |
 
 The map images are screenshots of the ctf5 layers taken in the DDNet client, separated by layer group.

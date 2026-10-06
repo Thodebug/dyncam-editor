@@ -9,6 +9,7 @@ import { GameView, SCREEN_FORMATS, TEE_POSITION } from './game-view.js';
 import { PointerInput } from './pointer.js';
 import { SnapshotButton } from './snapshot.js';
 import { cameraOffsetAt } from './camera.js';
+import { LoadingScreen, downloadImages } from './loading.js';
 
 const MAP_IMAGES = {
   'clouds-far': 'assets/map/clouds-far.webp',
@@ -22,20 +23,9 @@ const SPRITE_IMAGES = {
   game: 'assets/sprites/game.png',
   particles: 'assets/sprites/particles.png',
 };
+const COLLISION_IMAGE = 'assets/map/collision.png';
 
 const byId = (id) => document.getElementById(id);
-
-function loadImage(url) {
-  const image = new Image();
-  image.src = url;
-  return image.decode().then(() => image);
-}
-
-/** Loads { key: url } into { key: image }. */
-async function loadImages(urls) {
-  const entries = await Promise.all(Object.entries(urls).map(async ([key, url]) => [key, await loadImage(url)]));
-  return Object.fromEntries(entries);
-}
 
 /** Aspect ratio of the game view, from the chosen screen format. */
 function viewAspect(store) {
@@ -170,15 +160,23 @@ async function start() {
   new ResizeObserver(() => settingsPanel.fitNames()).observe(byId('sidebar'));
 
   // Game view
-  const [map, sprites, collision] = await Promise.all([
-    loadImages(MAP_IMAGES),
-    loadImages(SPRITE_IMAGES),
-    CollisionMap.load('assets/map/collision.png'),
-    document.fonts.load('12px "DejaVu Sans"').catch(() => {}),
-  ]);
+  const loadingScreen = new LoadingScreen(byId('loading'));
+  let images;
+  try {
+    [images] = await Promise.all([
+      downloadImages({ ...MAP_IMAGES, ...SPRITE_IMAGES, collision: COLLISION_IMAGE }, (progress) =>
+        loadingScreen.showDownload(progress),
+      ),
+      document.fonts.load('12px "DejaVu Sans"').catch(() => {}),
+    ]);
+  } catch (error) {
+    loadingScreen.showError();
+    throw error;
+  }
+  const imagesOf = (urls) => Object.fromEntries(Object.keys(urls).map((key) => [key, images[key]]));
 
   const canvas = byId('game-canvas');
-  const player = new Player(collision, TEE_POSITION);
+  const player = new Player(CollisionMap.fromImage(images.collision), TEE_POSITION);
   const pointer = new PointerInput({
     canvas,
     stage,
@@ -187,8 +185,19 @@ async function start() {
     getScreen: () => gameView.screen,
     onChange: () => gameView.requestRender(),
   });
-  gameView = new GameView({ canvas, images: map, renderer: new TeeRenderer(sprites), store, pointer, player });
-  gameView.setAspect(viewAspect(store));
+  const view = new GameView({
+    canvas,
+    images: imagesOf(MAP_IMAGES),
+    renderer: new TeeRenderer(imagesOf(SPRITE_IMAGES)),
+    store,
+    pointer,
+    player,
+  });
+  view.setAspect(viewAspect(store));
+  loadingScreen.showPreparing(0, view.scaleStepCount);
+  await view.scaleLayersInSteps((done, total) => loadingScreen.showPreparing(done, total));
+  gameView = view;
+  if (view.aspect !== viewAspect(store)) view.setAspect(viewAspect(store));
   new SnapshotButton({ gameView, store });
 
   const captureToggle = byId('capture-toggle');
@@ -222,7 +231,8 @@ async function start() {
   new ResizeObserver(() => gameView.resize()).observe(stage);
   settingsPanel.fitNames();
   gameView.resize();
-  gameView.requestRender();
+  gameView.render();
+  loadingScreen.hide();
 }
 
 start();

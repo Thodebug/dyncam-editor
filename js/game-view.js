@@ -38,17 +38,19 @@ export const TEE_POSITION = { x: 5200, y: 1777 };
 /**
  * The map layers are screenshots of the game on a 16:9 screen, taken with the camera at CAPTURE_CAMERA
  * and a zoom of CAPTURE_ZOOM, one image per group of layers. Each image is drawn with the parallax of its group.
+ * bounds: box of the non-transparent pixels of the image, [left, top, right, bottom] in image pixels,
+ * right and bottom excluded.
  */
 const CAPTURE_SCREEN = screenSize(16 / 9);
 const CAPTURE_CAMERA = { x: 5200, y: 1776 };
 const CAPTURE_ZOOM = Math.pow(0.866025, -3);
 const LAYERS_BEHIND = [
-  { name: 'clouds-far', parallaxX: 49, parallaxY: 51 },
-  { name: 'clouds-near', parallaxX: 70, parallaxY: 70 },
-  { name: 'cave', parallaxX: 96, parallaxY: 96 },
-  { name: 'background', parallaxX: 100, parallaxY: 100 },
+  { name: 'clouds-far', parallaxX: 49, parallaxY: 51, bounds: [10, 0, 2540, 1440] },
+  { name: 'clouds-near', parallaxX: 70, parallaxY: 70, bounds: [0, 321, 2560, 786] },
+  { name: 'cave', parallaxX: 96, parallaxY: 96, bounds: [0, 142, 2560, 1440] },
+  { name: 'background', parallaxX: 100, parallaxY: 100, bounds: [405, 188, 2560, 1440] },
 ];
-const LAYERS_IN_FRONT = [{ name: 'foreground', parallaxX: 100, parallaxY: 100 }];
+const LAYERS_IN_FRONT = [{ name: 'foreground', parallaxX: 100, parallaxY: 100, bounds: [0, 0, 2560, 1440] }];
 
 /**
  * Sky of ctf5: one quad with a color per corner, in a group with a parallax of 0.
@@ -102,27 +104,6 @@ function renderSky(width, height, viewWidth, viewHeight) {
   return canvas;
 }
 
-/** Bounding box of the non-transparent pixels of an image: { left, top, right, bottom }, right and bottom excluded. */
-function opaqueBounds(image) {
-  const canvas = document.createElement('canvas');
-  canvas.width = image.width;
-  canvas.height = image.height;
-  const context = canvas.getContext('2d', { willReadFrequently: true });
-  context.drawImage(image, 0, 0);
-  const alpha = context.getImageData(0, 0, image.width, image.height).data;
-  const bounds = { left: image.width, top: image.height, right: 0, bottom: 0 };
-  for (let y = 0; y < image.height; y++) {
-    for (let x = 0; x < image.width; x++) {
-      if (alpha[(y * image.width + x) * 4 + 3] === 0) continue;
-      bounds.left = Math.min(bounds.left, x);
-      bounds.right = Math.max(bounds.right, x + 1);
-      bounds.top = Math.min(bounds.top, y);
-      bounds.bottom = Math.max(bounds.bottom, y + 1);
-    }
-  }
-  return bounds;
-}
-
 /** Canvas showing the game as DDNet renders it: map, tee, laser, hook, cursor and distance circles. */
 export class GameView {
   /**
@@ -148,12 +129,10 @@ export class GameView {
     this.pixelRatio = 1;
     this.scale = 1;
     this.scaledLayers = null;
+    this.scalingInSteps = false;
     this.ringCache = null;
     this.frameRequest = 0;
     this.blinkTimer = 0;
-    this.layerBounds = Object.fromEntries(
-      [...LAYERS_BEHIND, ...LAYERS_IN_FRONT].map((layer) => [layer.name, opaqueBounds(images[layer.name])]),
-    );
 
     const style = getComputedStyle(document.documentElement);
     this.font = style.getPropertyValue('--font').trim();
@@ -186,16 +165,39 @@ export class GameView {
     this.requestRender();
   }
 
+  /** Number of steps of scaleLayerSteps(). */
+  get scaleStepCount() {
+    return 1 + LAYERS_BEHIND.length + LAYERS_IN_FRONT.length;
+  }
+
+  scaleLayers() {
+    const steps = this.scaleLayerSteps();
+    while (!steps.next().done);
+  }
+
+  /** Runs scaleLayers() one step at a time, giving the browser a frame between steps. onProgress(done, total) */
+  async scaleLayersInSteps(onProgress) {
+    this.scalingInSteps = true;
+    let done = 0;
+    for (const _ of this.scaleLayerSteps()) {
+      onProgress(++done, this.scaleStepCount);
+      await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)));
+    }
+    this.scalingInSteps = false;
+  }
+
   /**
    * Prepares the sky and resamples each layer once for the current canvas size, so frames only copy pixels.
    * Each resampled layer keeps only the part that can appear on screen: its non-transparent pixels, within
    * the area the camera can reach (the camera offset never exceeds CAMERA_MAX_DISTANCE).
+   * Yields after the sky and after each layer.
    */
-  scaleLayers() {
+  *scaleLayerSteps() {
     const { width, height } = this.canvas;
     const scaleX = width / this.screen.width;
     const scaleY = height / this.screen.height;
     const layers = { sky: { canvas: renderSky(width, height, this.screen.width, this.screen.height), left: 0, top: 0 } };
+    yield;
 
     for (const layer of [...LAYERS_BEHIND, ...LAYERS_IN_FRONT]) {
       const image = this.images[layer.name];
@@ -209,15 +211,18 @@ export class GameView {
       const reachX = (CAMERA_MAX_DISTANCE + Math.abs(TEE_POSITION.x - CAPTURE_CAMERA.x)) * (layer.parallaxX / 100) * scaleX;
       const reachY = (CAMERA_MAX_DISTANCE + Math.abs(TEE_POSITION.y - CAPTURE_CAMERA.y)) * (layer.parallaxY / 100) * scaleY;
       // Non-transparent pixels, with 2 source pixels of margin for the resampling filter
-      const bounds = this.layerBounds[layer.name];
+      const [boundsLeft, boundsTop, boundsRight, boundsBottom] = layer.bounds;
       const ratioX = fullWidth / image.width;
       const ratioY = fullHeight / image.height;
 
-      const left = Math.max(0, Math.floor(fullWidth / 2 - width / 2 - reachX - 2), Math.floor((bounds.left - 2) * ratioX));
-      const right = Math.min(fullWidth, Math.ceil(fullWidth / 2 + width / 2 + reachX + 2), Math.ceil((bounds.right + 2) * ratioX));
-      const top = Math.max(0, Math.floor(fullHeight / 2 - height / 2 - reachY - 2), Math.floor((bounds.top - 2) * ratioY));
-      const bottom = Math.min(fullHeight, Math.ceil(fullHeight / 2 + height / 2 + reachY + 2), Math.ceil((bounds.bottom + 2) * ratioY));
-      if (right <= left || bottom <= top) continue;
+      const left = Math.max(0, Math.floor(fullWidth / 2 - width / 2 - reachX - 2), Math.floor((boundsLeft - 2) * ratioX));
+      const right = Math.min(fullWidth, Math.ceil(fullWidth / 2 + width / 2 + reachX + 2), Math.ceil((boundsRight + 2) * ratioX));
+      const top = Math.max(0, Math.floor(fullHeight / 2 - height / 2 - reachY - 2), Math.floor((boundsTop - 2) * ratioY));
+      const bottom = Math.min(fullHeight, Math.ceil(fullHeight / 2 + height / 2 + reachY + 2), Math.ceil((boundsBottom + 2) * ratioY));
+      if (right <= left || bottom <= top) {
+        yield;
+        continue;
+      }
 
       const full = document.createElement('canvas');
       full.width = fullWidth;
@@ -232,6 +237,7 @@ export class GameView {
       kept.height = bottom - top;
       kept.getContext('2d').drawImage(full, -left, -top);
       layers[layer.name] = { canvas: kept, left, top, fullWidth, fullHeight };
+      yield;
     }
     this.scaledLayers = layers;
   }
@@ -250,7 +256,7 @@ export class GameView {
     this.frameRequest = 0;
     const context = this.context;
     const { width, height } = this.canvas;
-    if (!width || !height) return;
+    if (!width || !height || this.scalingInSteps) return;
 
     const now = performance.now();
     const limits = cursorLimits(this.store.values, this.store.dyncam);

@@ -485,6 +485,112 @@ textarea::placeholder {
   display: none;
 }
 
+/*
+ * Loading screen, as the DDNet client draws it: the menu background (CMenus::RenderBackground) and the
+ * loading box (CMenus::RenderLoadingDirect). --ui is one unit of the game UI, which is 600 units high.
+ */
+.loading {
+  --ui: calc(100cqh / 600);
+  position: absolute;
+  inset: 0;
+  container-type: size;
+  overflow: hidden;
+  background: var(--ui-color);
+}
+
+.loading[hidden] {
+  display: none;
+}
+
+/* Checkerboard of 15-unit squares on a 300-unit-high screen, moving 0.3 squares left and 0.15 down per second */
+.loading-tiles {
+  --tile: calc(100cqh / 20);
+  position: absolute;
+  top: calc(-2 * var(--tile));
+  left: 0;
+  width: calc(100cqw + 4 * var(--tile));
+  height: calc(100cqh + 2 * var(--tile));
+  background: repeating-conic-gradient(transparent 0 25%, rgba(0, 0, 0, 0.045) 0 50%) 0 0 / calc(2 * var(--tile))
+    calc(2 * var(--tile));
+  animation: loading-tiles calc(40s / 3) linear infinite;
+}
+
+@keyframes loading-tiles {
+  to {
+    transform: translate(calc(-4 * var(--tile)), calc(2 * var(--tile)));
+  }
+}
+
+/* Border fade: blob.png stretched from −100 to +100 units around a 300-unit-high screen */
+.loading-blob {
+  position: absolute;
+  top: calc(-100cqh / 3);
+  left: calc(-100cqh / 3);
+  width: calc(100cqw + 200cqh / 3);
+  height: calc(100cqh + 200cqh / 3);
+  background: url("assets/sprites/blob.png") 0 0 / 100% 100%;
+}
+
+.loading-box {
+  position: absolute;
+  inset: calc(160 * var(--ui));
+  padding: calc(20 * var(--ui));
+  border-radius: calc(15 * var(--ui));
+  background: rgba(0, 0, 0, 0.5);
+  text-align: center;
+  white-space: nowrap;
+  /* Shown after 200 ms, so a fast load does not flash it */
+  animation: loading-box-delay 0s 0.2s backwards;
+}
+
+@keyframes loading-box-delay {
+  from {
+    visibility: hidden;
+  }
+}
+
+.loading.is-error .loading-box {
+  animation: none;
+}
+
+.loading-title,
+.loading-detail {
+  height: calc(24 * var(--ui));
+  overflow: hidden;
+  line-height: calc(24 * var(--ui));
+  text-overflow: ellipsis;
+}
+
+.loading-title {
+  font-size: calc(24 * var(--ui));
+}
+
+.loading-detail {
+  margin-top: calc(20 * var(--ui));
+  font-size: calc(20 * var(--ui));
+}
+
+.loading-bar {
+  position: absolute;
+  right: calc(40 * var(--ui));
+  bottom: calc(50 * var(--ui));
+  left: calc(40 * var(--ui));
+  height: calc(25 * var(--ui));
+  border-radius: calc(5 * var(--ui));
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.loading-bar[hidden] {
+  display: none;
+}
+
+.loading-bar-fill {
+  width: max(calc(var(--progress, 0) * 100%), calc(10 * var(--ui)));
+  height: 100%;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.5);
+}
+
 /* ---------- Sidebar ---------- */
 
 h2 {

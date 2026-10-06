@@ -38,12 +38,8 @@ export class CollisionMap {
     this.tiles = tiles;
   }
 
-  /** Loads an image with one pixel per tile: white = TILE_SOLID, grey = TILE_NOHOOK, black = empty. */
-  static async load(url) {
-    const image = new Image();
-    image.src = url;
-    await image.decode();
-
+  /** Reads an image with one pixel per tile: white = TILE_SOLID, grey = TILE_NOHOOK, black = empty. */
+  static fromImage(image) {
     const canvas = document.createElement('canvas');
     canvas.width = image.width;
     canvas.height = image.height;
