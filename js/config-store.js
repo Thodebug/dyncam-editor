@@ -21,7 +21,9 @@ export class ConfigStore {
     this.values = defaultValues();
     this.dyncam = true;
     this.baseline = ConfigStore.defaultBaseline();
-    this.changesOnly = false;
+    this.changesOnly = true;
+    /** Set once the user ticks or unticks Changes only; only then is the choice remembered. */
+    this.changesOnlyChoice = null;
     this.screenFormat = '16:9';
     this.listeners = [];
     this.saveTimer = 0;
@@ -53,6 +55,7 @@ export class ConfigStore {
 
   setChangesOnly(enabled) {
     this.changesOnly = enabled;
+    this.changesOnlyChoice = enabled;
     this.notify();
   }
 
@@ -170,7 +173,7 @@ export class ConfigStore {
       values: this.values,
       dyncam: this.dyncam,
       baseline: this.baseline,
-      changesOnly: this.changesOnly,
+      changesOnlyChoice: this.changesOnlyChoice,
       screenFormat: this.screenFormat,
     };
     try {
@@ -192,7 +195,10 @@ export class ConfigStore {
 
     if (data.values) this.replaceValues(data.values);
     if (typeof data.dyncam === 'boolean') this.dyncam = data.dyncam;
-    if (typeof data.changesOnly === 'boolean') this.changesOnly = data.changesOnly;
+    if (typeof data.changesOnlyChoice === 'boolean') {
+      this.changesOnly = data.changesOnlyChoice;
+      this.changesOnlyChoice = data.changesOnlyChoice;
+    }
     if (typeof data.screenFormat === 'string') this.screenFormat = data.screenFormat;
     if (data.baseline) {
       const baseline = ConfigStore.defaultBaseline();
