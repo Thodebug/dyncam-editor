@@ -1,0 +1,804 @@
+/*
+ * Look of the DDNet settings menu (src/game/client/components/menus*.cpp, ui.cpp):
+ * ui_color background with a checkerboard and a vignette, a tab bar, a dark page,
+ * white DejaVu Sans text with a dark outline.
+ *
+ * --u is the DDNet UI unit: the screen is 600 units high. It is clamped so the
+ * page stays readable on very small and very large windows.
+ */
+
+/* ---------- Fonts ---------- */
+
+@font-face {
+  font-family: "DejaVu Sans";
+  src: url("assets/fonts/dejavu-sans.woff2") format("woff2");
+  font-display: block;
+}
+
+/* Subset of Font Awesome Free 6 Solid (see CREDITS.md) */
+@font-face {
+  font-family: "Dyncam Icons";
+  font-weight: 900;
+  src: url("assets/fonts/icons.woff2") format("woff2");
+  font-display: block;
+}
+
+/* ---------- Theme ---------- */
+
+:root {
+  color-scheme: dark;
+  --u: clamp(1.3px, calc(100vh / 600), 1.8px);
+
+  /* ui_color (default 0xE4A046AF) with full opacity */
+  --ui-color: rgb(153, 163, 197);
+
+  --tab: rgba(0, 0, 0, 0.25);
+  --tab-hover: rgba(255, 255, 255, 0.25);
+  --page: rgba(0, 0, 0, 0.5);
+  --block: rgba(255, 255, 255, 0.25);
+  --list: rgba(0, 0, 0, 0.15);
+  --row: rgba(0, 0, 0, 0.1);
+
+  --button: rgba(255, 255, 255, 0.5);
+  --button-hover: rgba(255, 255, 255, 0.75);
+  --button-active: rgba(255, 255, 255, 0.25);
+  --checkbox: rgba(255, 255, 255, 0.25);
+  --checkbox-hover: rgba(255, 255, 255, 0.375);
+  --edit: rgba(255, 255, 255, 0.5);
+  --edit-hover: rgba(255, 255, 255, 0.6);
+  --edit-focus: rgba(255, 255, 255, 0.4);
+
+  --rail: rgba(255, 255, 255, 0.25);
+  --rail-inactive: rgba(0, 0, 0, 0.28);
+  --knob: rgb(204, 204, 204);
+  --knob-hover: #fff;
+  --knob-drag: rgb(230, 230, 230);
+
+  --tooltip: rgba(51, 51, 51, 0.8);
+  --text: #fff;
+  --text-outline: rgba(0, 0, 0, 0.3);
+  --warning: rgb(255, 102, 102);
+
+  /* Colors of the distance circles in the game view */
+  --ring-mouse-max: #5aa2ff;
+  --ring-mouse-min: #c3cbe0;
+  --ring-dyncam-max: #4fe0c4;
+  --ring-dyncam-min: #ff86c0;
+  --ring-deadzone: #ffc94d;
+  --ring-camera-offset: #d1a8ff;
+
+  --font: "DejaVu Sans", Verdana, "Segoe UI", sans-serif;
+  --icon-font: "Dyncam Icons";
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  height: 100%;
+  background: var(--ui-color);
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  color: var(--text);
+  font: calc(12.8 * var(--u)) / 1.25 var(--font);
+  font-variant-numeric: tabular-nums;
+  text-shadow:
+    1px 0 var(--text-outline),
+    -1px 0 var(--text-outline),
+    0 1px var(--text-outline),
+    0 -1px var(--text-outline);
+  background:
+    radial-gradient(ellipse 122vh 83vh at 50% 50%, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.498) 96.6%) fixed,
+    conic-gradient(rgba(0, 0, 0, 0.045) 0 25%, transparent 0 50%, rgba(0, 0, 0, 0.045) 0 75%, transparent 0) 0 0 / 10vh 10vh fixed,
+    var(--ui-color);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+  text-shadow: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
+.icon {
+  font-family: var(--icon-font);
+  font-weight: 900;
+  font-style: normal;
+  line-height: 1;
+}
+
+/* ---------- Page layout ---------- */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  padding: calc(8 * var(--u));
+  padding-inline: max(16px, calc(8 * var(--u)));
+}
+
+.page {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) calc(250 * var(--u));
+  gap: calc(10 * var(--u));
+  padding: calc(8 * var(--u));
+  background: var(--page);
+  border-radius: 0 calc(10 * var(--u)) calc(10 * var(--u)) calc(10 * var(--u));
+}
+
+.view {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.view-frame {
+  flex: 1;
+  min-height: 0;
+  container-type: size;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: calc(6 * var(--u));
+  scrollbar-width: thin;
+  scrollbar-color: rgb(204, 204, 204) rgba(255, 255, 255, 0.25);
+}
+
+.sidebar::-webkit-scrollbar {
+  width: calc(10 * var(--u));
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: calc(5 * var(--u));
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgb(204, 204, 204);
+  border-radius: calc(5 * var(--u));
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: #fff;
+}
+
+/* ---------- Tab bar ---------- */
+
+.tab-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: calc(10 * var(--u));
+  height: calc(24 * var(--u));
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0 calc(12 * var(--u));
+  border: 0;
+  border-radius: calc(10 * var(--u)) calc(10 * var(--u)) 0 0;
+  background: var(--tab);
+  font-size: calc(16 * var(--u));
+  white-space: nowrap;
+}
+
+.tab-title {
+  gap: calc(8 * var(--u));
+  background: var(--page);
+}
+
+.tab-title .info-button {
+  font-size: calc(12 * var(--u));
+}
+
+.tab-group {
+  display: flex;
+  height: 100%;
+}
+
+.tab-group:first-of-type {
+  margin-left: auto;
+}
+
+.tab-checkbox {
+  gap: calc(7 * var(--u));
+  font-size: calc(12.8 * var(--u));
+  cursor: pointer;
+}
+
+.tab-checkbox:hover {
+  background: var(--tab-hover);
+}
+
+/* ---------- Checkboxes, buttons, inputs ---------- */
+
+.checkbox {
+  display: grid;
+  place-items: center;
+  width: calc(16 * var(--u));
+  height: calc(16 * var(--u));
+  border-radius: calc(3 * var(--u));
+  background: var(--checkbox);
+  font-size: calc(12.8 * var(--u));
+}
+
+[role="switch"]:hover .checkbox {
+  background: var(--checkbox-hover);
+}
+
+[role="switch"][aria-checked="false"] .checkbox .icon {
+  visibility: hidden;
+}
+
+.checkbox-button {
+  display: flex;
+  align-items: center;
+  gap: calc(9 * var(--u));
+  height: calc(20 * var(--u));
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: calc(12.8 * var(--u));
+  cursor: pointer;
+}
+
+.button-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(5 * var(--u));
+  margin-top: calc(5 * var(--u));
+}
+
+.button-grid.single {
+  grid-template-columns: 1fr;
+}
+
+.button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(6 * var(--u));
+  height: calc(20 * var(--u));
+  padding: 0 calc(10 * var(--u));
+  border: 0;
+  border-radius: calc(5 * var(--u));
+  background: var(--button);
+  font-size: calc(12.8 * var(--u));
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: var(--button-hover);
+}
+
+.button:active {
+  background: var(--button-active);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+  background: var(--button);
+}
+
+.button .icon {
+  font-size: calc(11 * var(--u));
+}
+
+.info-button {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: calc(11 * var(--u));
+  line-height: 1;
+  opacity: 0.8;
+  cursor: help;
+}
+
+.info-button:hover {
+  opacity: 1;
+}
+
+textarea {
+  display: block;
+  width: 100%;
+  min-height: calc(70 * var(--u));
+  margin-top: calc(5 * var(--u));
+  padding: calc(3 * var(--u)) calc(4 * var(--u));
+  border: 0;
+  border-radius: calc(3 * var(--u));
+  background: var(--edit);
+  font-size: calc(10 * var(--u));
+  resize: vertical;
+  outline: none;
+}
+
+textarea:hover {
+  background: var(--edit-hover);
+}
+
+textarea:focus {
+  background: var(--edit-focus);
+}
+
+textarea::placeholder {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* ---------- Game view ---------- */
+
+.stage {
+  position: relative;
+  width: min(100cqw, 100cqh * 16 / 9);
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: calc(5 * var(--u));
+  background: #000;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: none;
+  touch-action: none;
+}
+
+.snapshot-button {
+  position: absolute;
+  top: calc(5 * var(--u));
+  right: calc(5 * var(--u));
+  display: grid;
+  place-items: center;
+  width: calc(22 * var(--u));
+  height: calc(22 * var(--u));
+  padding: 0;
+  border: 0;
+  border-radius: calc(5 * var(--u));
+  background: var(--tooltip);
+  font-size: calc(11 * var(--u));
+  opacity: 0.55;
+  transition: opacity 0.15s;
+  cursor: pointer;
+}
+
+.snapshot-button:hover,
+.snapshot-button:focus-visible,
+.snapshot-button.is-done {
+  opacity: 1;
+}
+
+.stage.is-mouse-captured .snapshot-button {
+  display: none;
+}
+
+.readout {
+  position: absolute;
+  left: calc(5 * var(--u));
+  bottom: calc(5 * var(--u));
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(2 * var(--u)) calc(14 * var(--u));
+  max-width: calc(100% - 10 * var(--u));
+  padding: calc(2 * var(--u)) calc(6 * var(--u));
+  border-radius: calc(5 * var(--u));
+  background: var(--tooltip);
+  font-size: calc(10 * var(--u));
+  pointer-events: none;
+}
+
+.readout[hidden] {
+  display: none;
+}
+
+/* ---------- Sidebar ---------- */
+
+h2 {
+  display: flex;
+  align-items: center;
+  gap: calc(8 * var(--u));
+  height: calc(30 * var(--u));
+  margin: 0;
+  font-size: calc(20 * var(--u));
+  font-weight: 400;
+}
+
+h2 .info-button {
+  font-size: calc(12 * var(--u));
+}
+
+h2 .checkbox-button {
+  margin-left: auto;
+  gap: calc(6 * var(--u));
+  font-size: calc(11 * var(--u));
+  white-space: nowrap;
+}
+
+.section {
+  margin-bottom: calc(12 * var(--u));
+}
+
+.block {
+  padding: calc(10 * var(--u));
+  border-radius: calc(10 * var(--u));
+  background: var(--block);
+}
+
+.block-title {
+  margin-bottom: calc(6 * var(--u));
+  font-size: calc(16 * var(--u));
+}
+
+.block-subtitle {
+  display: block;
+  margin-top: calc(2 * var(--u));
+  font-size: calc(10 * var(--u));
+  opacity: 0.85;
+}
+
+/* The block of the camera mode shown in the game view is highlighted; the other one can be clicked */
+.mode-block {
+  transition: background-color 0.15s, box-shadow 0.15s;
+}
+
+.mode-block.is-active {
+  background: rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 0 0 calc(2 * var(--u)) rgba(255, 255, 255, 0.75);
+}
+
+.mode-block:not(.is-active) {
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+}
+
+.mode-block:not(.is-active):hover {
+  background: rgba(255, 255, 255, 0.17);
+}
+
+.more-settings {
+  margin-top: calc(8 * var(--u));
+}
+
+.more-settings > summary {
+  display: flex;
+  align-items: center;
+  gap: calc(6 * var(--u));
+  height: calc(20 * var(--u));
+  font-size: calc(12.8 * var(--u));
+  list-style: none;
+  opacity: 0.9;
+  cursor: pointer;
+}
+
+.more-settings > summary::-webkit-details-marker {
+  display: none;
+}
+
+.more-settings > summary .icon {
+  font-size: calc(11 * var(--u));
+  opacity: 0.65;
+}
+
+.more-settings[open] .when-closed,
+.more-settings:not([open]) .when-open {
+  display: none;
+}
+
+/* ---------- Commands ---------- */
+
+.commands-list {
+  margin: 0;
+  padding: calc(6 * var(--u)) calc(8 * var(--u));
+  border-radius: calc(5 * var(--u));
+  background: var(--list);
+  font-family: var(--font);
+  font-size: calc(10.5 * var(--u));
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.commands-list .unchanged {
+  opacity: 0.5;
+}
+
+.commands-list .empty {
+  opacity: 0.5;
+  font-style: italic;
+}
+
+.paste-message {
+  min-height: 1.2em;
+  margin-top: calc(4 * var(--u));
+  font-size: calc(10 * var(--u));
+}
+
+/* ---------- Setting rows ---------- */
+
+.setting {
+  margin-top: calc(5 * var(--u));
+  padding: calc(4 * var(--u)) calc(6 * var(--u)) calc(5 * var(--u));
+  border-radius: calc(5 * var(--u));
+  background: var(--row);
+}
+
+.setting-header {
+  display: flex;
+  align-items: center;
+  gap: calc(5 * var(--u));
+  height: calc(20 * var(--u));
+}
+
+.setting-color {
+  flex: none;
+  width: calc(8 * var(--u));
+  height: calc(8 * var(--u));
+  border-radius: 50%;
+  background: var(--ring-color, transparent);
+}
+
+.sidebar.hide-colors .setting-color {
+  visibility: hidden;
+}
+
+.setting-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: calc(12 * var(--u));
+  white-space: nowrap;
+}
+
+.number-input {
+  width: calc(48 * var(--u));
+  height: calc(16 * var(--u));
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: calc(3 * var(--u));
+  background: var(--edit);
+  font-size: calc(11 * var(--u));
+  text-align: center;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.number-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+}
+
+.number-input:hover {
+  background: var(--edit-hover);
+}
+
+.number-input:focus {
+  background: var(--edit-focus);
+}
+
+.setting-message {
+  margin-top: calc(2 * var(--u));
+  font-size: calc(10 * var(--u));
+}
+
+.setting-message.is-warning {
+  color: var(--warning);
+}
+
+/* ---------- Sliders ---------- */
+
+/* The default value mark sits under the slider: visible through the rail, hidden by the knob */
+.slider {
+  position: relative;
+}
+
+.slider input {
+  position: relative;
+}
+
+.default-mark {
+  position: absolute;
+  top: calc(3 * var(--u));
+  width: calc(2 * var(--u));
+  height: calc(10 * var(--u));
+  margin-left: calc(-1 * var(--u));
+  border-radius: calc(1 * var(--u));
+  background: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+
+input[type="range"] {
+  display: block;
+  width: 100%;
+  height: calc(16 * var(--u));
+  margin: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+/* --track is set from JS to grey out the part of the rail where the value has no effect */
+input[type="range"]::-webkit-slider-runnable-track {
+  height: calc(10 * var(--u));
+  border-radius: calc(5 * var(--u));
+  background: var(--track, var(--rail));
+}
+
+input[type="range"]::-moz-range-track {
+  height: calc(10 * var(--u));
+  border-radius: calc(5 * var(--u));
+  background: var(--track, var(--rail));
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  width: calc(33 * var(--u));
+  height: calc(10 * var(--u));
+  border: 0;
+  border-radius: calc(5 * var(--u));
+  background: var(--knob);
+  -webkit-appearance: none;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: calc(33 * var(--u));
+  height: calc(10 * var(--u));
+  border: 0;
+  border-radius: calc(5 * var(--u));
+  background: var(--knob);
+}
+
+input[type="range"]:hover::-webkit-slider-thumb {
+  height: calc(13 * var(--u));
+  margin-top: calc(-1.5 * var(--u));
+  background: var(--knob-hover);
+}
+
+input[type="range"]:hover::-moz-range-thumb {
+  height: calc(13 * var(--u));
+  background: var(--knob-hover);
+}
+
+input[type="range"]:active::-webkit-slider-thumb {
+  background: var(--knob-drag);
+}
+
+/* ---------- Tooltip ---------- */
+
+.tooltip {
+  position: fixed;
+  z-index: 20;
+  max-width: min(calc(260 * var(--u)), calc(100vw - 20px));
+  padding: calc(5 * var(--u));
+  border-radius: calc(5 * var(--u));
+  background: var(--tooltip);
+  font-size: calc(11 * var(--u));
+  line-height: 1.35;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.tooltip.is-visible {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tooltip {
+    transition: none;
+  }
+}
+
+/* ---------- Snapshot popup ---------- */
+
+.popup {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.popup[hidden] {
+  display: none;
+}
+
+.popup-frame {
+  max-width: min(960px, 100%);
+  padding: calc(8 * var(--u));
+  border-radius: calc(10 * var(--u));
+  background: var(--ui-color);
+}
+
+.popup-content {
+  display: flex;
+  flex-direction: column;
+  gap: calc(6 * var(--u));
+  padding: calc(8 * var(--u));
+  border-radius: calc(10 * var(--u));
+  background: var(--page);
+}
+
+.popup-content img {
+  display: block;
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: calc(5 * var(--u));
+}
+
+.popup-message {
+  font-size: calc(11 * var(--u));
+}
+
+/* ---------- Narrow windows ---------- */
+
+/* The view on top, the settings below, the whole page scrolls */
+@media (max-width: 1000px) {
+  .screen {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .tab-bar {
+    height: auto;
+    flex-wrap: wrap;
+    row-gap: calc(4 * var(--u));
+  }
+
+  .tab-bar .tab {
+    height: calc(24 * var(--u));
+  }
+
+  .tab-group:first-of-type {
+    margin-left: 0;
+  }
+
+  .tab-title {
+    width: 100%;
+  }
+
+  .page {
+    grid-template-columns: 1fr;
+  }
+
+  .view-frame {
+    flex: none;
+    container-type: normal;
+  }
+
+  .stage {
+    width: 100%;
+  }
+
+  .sidebar {
+    overflow: visible;
+    padding-right: 0;
+  }
+}

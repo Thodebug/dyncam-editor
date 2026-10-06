@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Dyncam editor</title>
+  <meta name="description" content="Set the DDNet camera settings (cl_dyncam_*, cl_mouse_*) on the real game view and copy the console commands.">
+  <link rel="preload" href="assets/fonts/dejavu-sans.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <div class="screen">
+    <header class="tab-bar">
+      <div class="tab tab-title">
+        Dyncam editor
+        <button class="info-button icon" type="button" aria-label="About the dynamic camera"
+          data-tip="cl_dyncam 1: the camera slides toward your cursor, so you see further where you aim (cl_dyncam_* settings). cl_dyncam 0: cl_mouse_* settings, the camera stays on your tee unless cl_mouse_followfactor is above 0. The view is the real game: ctf5, 16:9, zoom 1.">&#xF05A;</button>
+      </div>
+      <div class="tab-group">
+        <button class="tab tab-checkbox" id="dyncam-toggle" type="button" role="switch" aria-checked="true"
+          data-tip="Checked: preview with cl_dyncam 1 (cl_dyncam_* settings). Unchecked: cl_dyncam 0 (cl_mouse_* settings).">
+          <span class="checkbox"><span class="icon">&#xF00D;</span></span>cl_dyncam
+        </button>
+      </div>
+      <div class="tab-group">
+        <button class="tab tab-checkbox" id="capture-toggle" type="button" role="switch" aria-checked="false"
+          data-tip="Click the game view to capture your mouse: the cursor then moves with your sensitivity (inp_mousesens, cl_dyncam_mousesens), exactly like in DDNet. Esc releases it.">
+          <span class="checkbox"><span class="icon">&#xF00D;</span></span>Capture mouse
+        </button>
+      </div>
+      <div class="tab-group">
+        <button class="tab tab-checkbox" id="distances-toggle" type="button" role="switch" aria-checked="false"
+          data-tip="Draw max distance, min distance, deadzone and max camera offset as circles around the tee, and show the live cursor distance, camera offset and cursor position on screen">
+          <span class="checkbox"><span class="icon">&#xF00D;</span></span>Show distances
+        </button>
+      </div>
+    </header>
+
+    <main class="page">
+      <section class="view">
+        <div class="view-frame">
+          <div class="stage" id="stage">
+            <canvas id="game-canvas" aria-label="Game view: hover to aim"></canvas>
+            <button class="snapshot-button" id="snapshot-button" type="button" aria-label="Copy image"
+              data-tip="Copy an image of this view with your commands, ready to paste in Discord"><span class="icon" id="snapshot-icon">&#xF030;</span></button>
+            <div class="readout" id="readout" hidden>
+              <span>Cursor distance: <b id="readout-cursor">0</b> / <span id="readout-cursor-max">0</span></span>
+              <span>Camera offset: <b id="readout-offset">0</b> / <span id="readout-offset-max">0</span></span>
+              <span>Cursor on screen: <b id="readout-screen">0</b></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="sidebar hide-colors" id="sidebar">
+        <section class="section">
+          <h2>
+            Commands
+            <button class="info-button icon" type="button" aria-label="How to apply"
+              data-tip="To apply in game: press F1, paste with Ctrl+V, then press Enter. DDNet saves the values when you quit.">&#xF05A;</button>
+            <button class="checkbox-button" id="changes-only" type="button" role="switch" aria-checked="false"
+              data-tip="List only the values that differ from the DDNet defaults (or from the config you pasted), so the rest of your config stays as it is. Unchanged lines are dimmed.">
+              <span class="checkbox"><span class="icon">&#xF00D;</span></span>Changes only
+            </button>
+          </h2>
+          <pre class="commands-list" id="commands-list"></pre>
+          <div class="button-grid">
+            <button class="button" id="copy-button" type="button"><span class="icon">&#xF0C5;</span><span id="copy-label">Copy</span></button>
+            <button class="button" id="share-button" type="button" data-tip="Copy a link that reopens the editor with these exact values"><span class="icon">&#xF0C1;</span><span id="share-label">Share link</span></button>
+            <button class="button" id="paste-button" type="button" aria-expanded="false"><span class="icon">&#xF0EA;</span>Paste config</button>
+            <button class="button" id="reset-button" type="button" data-tip="Set every camera setting back to the DDNet default"><span class="icon">&#xF0E2;</span><span id="reset-label">Reset all</span></button>
+          </div>
+          <div id="paste-box" hidden>
+            <textarea id="paste-input" spellcheck="false" placeholder="Paste settings_ddnet.cfg or console lines, e.g. cl_dyncam_deadzone 300"></textarea>
+            <div class="button-grid single"><button class="button" id="paste-load" type="button">Load</button></div>
+            <div class="paste-message" id="paste-message" role="status"></div>
+          </div>
+        </section>
+
+        <section class="section block mode-block" id="block-dyncam">
+          <div class="block-title">cl_dyncam 1 <span class="block-subtitle">dynamic camera, uses cl_dyncam_*</span></div>
+          <div id="settings-dyncam"></div>
+          <details class="more-settings">
+            <summary><span class="icon when-closed">&#xF078;</span><span class="icon when-open">&#xF077;</span>More settings</summary>
+            <div id="settings-dyncam-more"></div>
+          </details>
+        </section>
+
+        <section class="section block mode-block" id="block-mouse">
+          <div class="block-title">cl_dyncam 0 <span class="block-subtitle">normal camera, uses cl_mouse_*</span></div>
+          <div id="settings-mouse"></div>
+          <details class="more-settings">
+            <summary><span class="icon when-closed">&#xF078;</span><span class="icon when-open">&#xF077;</span>More settings</summary>
+            <div id="settings-mouse-more"></div>
+          </details>
+        </section>
+
+        <section class="section block" id="block-preview">
+          <div class="block-title">Capture mouse <span class="block-subtitle">your sensitivity, for the preview only</span></div>
+          <div id="settings-preview"></div>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <div class="tooltip" id="tooltip" role="tooltip"></div>
+
+  <div class="popup" id="snapshot-popup" hidden>
+    <div class="popup-frame">
+      <div class="popup-content">
+        <img id="snapshot-image" alt="Game view with your commands">
+        <div class="popup-message">Your browser blocked copying images: right-click the image to copy or save it.</div>
+        <div class="button-grid single"><button class="button" id="snapshot-close" type="button">Close</button></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
