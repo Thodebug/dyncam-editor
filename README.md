@@ -1,5 +1,7 @@
 # Dyncam editor
 
+[![Checks](https://github.com/Thodebug/dyncam-editor/actions/workflows/checks.yml/badge.svg)](https://github.com/Thodebug/dyncam-editor/actions/workflows/checks.yml)
+
 **Open the editor: https://thodebug.github.io/dyncam-editor/**
 
 Set the [DDNet](https://ddnet.org) camera settings on the real game view, then copy the console commands.
@@ -61,6 +63,9 @@ npm run check
 
 `npm run format` formats the files.
 
+GitHub Actions runs the same checks on every push (`.github/workflows/checks.yml`). The site is published on GitHub Pages
+only when they pass (`deploy.yml`), and each version tag gets a GitHub Release (`release.yml`).
+
 ## Project structure
 
 ```
@@ -96,6 +101,7 @@ assets/
   sprites/              tee skin, weapons, particles, menu background fade
   fonts/                DejaVu Sans and icons
   help/                 capture of the DDNet settings menu
+.github/workflows/     checks, deployment to GitHub Pages, releases
 eslint.config.js        code checks (development only)
 .prettierrc.json        code format (development only)
 ```
