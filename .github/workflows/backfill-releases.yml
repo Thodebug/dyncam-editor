@@ -21,7 +21,13 @@ jobs:
         run: |
           while read -r version commit; do
             if git rev-parse --verify --quiet "refs/tags/$version" > /dev/null; then continue; fi
-            gh release create "$version" --target "$commit" --title "$version" --notes "$(git log -1 --format=%B "$commit")"
+            # The API needs the full commit hash as target
+            target=$(git rev-parse "$commit")
+            if ! output=$(gh release create "$version" --target "$target" --title "$version" \
+              --notes "$(git log -1 --format=%B "$commit")" 2>&1); then
+              echo "::error::Release $version not created: $output"
+              exit 1
+            fi
           done << 'LIST'
           v0.12 fe99d0d
           v0.13 e808513
