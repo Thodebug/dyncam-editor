@@ -181,7 +181,12 @@ async function start() {
   entitiesToggle.addEventListener('click', () => store.setEntities(!store.entities));
 
   // The last state saved in the browser keeps the user's baseline; the values of a share link replace its values.
-  const loadLinkedConfig = () => store.loadShareToken(location.hash.replace(/^#/, ''));
+  // Once applied, the link is removed from the address, so a reload keeps the changes made since.
+  const loadLinkedConfig = () => {
+    if (store.loadShareToken(location.hash.replace(/^#/, ''))) {
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+  };
   store.restore();
   loadLinkedConfig();
   addEventListener('hashchange', loadLinkedConfig);
