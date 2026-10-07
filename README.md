@@ -5,6 +5,9 @@
 **Open the editor: https://thodebug.github.io/dyncam-editor/**
 
 Set the [DDNet](https://ddnet.org) camera settings on the real game view, then copy the console commands.
+Matches the DDNet 20.1.1 client.
+
+![The camera follows the cursor past the deadzone, then the deadzone setting changes](docs/demo.webp)
 
 DDNet's menu only has two camera options : Dynamic Camera and Smooth Dynamic Camera.
 Every other setting can only be changed in the console.
@@ -71,19 +74,65 @@ assets/
   sprites/              tee skin, weapons, particles, menu background fade
   fonts/                DejaVu Sans and icons
   help/                 capture of the DDNet settings menu
+docs/                   demo animation of the README
 .github/workflows/     checks, deployment to GitHub Pages, releases
 eslint.config.js        code checks (development only)
 .prettierrc.json        code format (development only)
 ```
 
-The formulas follow the DDNet source code. Comments in the code name the DDNet function each part comes from.
+## DDNet source
 
-## Limits
-- The view needs WebGL 2
-- Zoom x1 only
+The formulas and the rendering follow the source code of the DDNet 20.1.1 client. Comments in the code name the
+DDNet function each part comes from.
+
+| Module            | DDNet 20.1.1 source                                           |
+| ----------------- | ------------------------------------------------------------- |
+| `camera.js`       | [camera.cpp], [controls.cpp]                                  |
+| `settings.js`     | [config_variables.h]                                          |
+| `map-file.js`     | [datafile.cpp], [mapitems.h]                                  |
+| `map-renderer.js` | [render_layer.cpp], [map_renderer.cpp], [graphics.cpp]        |
+| `graphics.js`     | [backend_opengl3.cpp], [graphics_threaded.cpp], [data/shader] |
+| `maps.js`         | [gamecontroller.cpp]                                          |
+| `collision.js`    | [collision.cpp]                                               |
+| `hook.js`         | [gamecore.cpp]                                                |
+| `laser.js`        | [laser.cpp], [items.cpp]                                      |
+| `tee-renderer.js` | [players.cpp], [hud.cpp], [render.cpp]                        |
+| `game-view.js`    | [gameclient.cpp]                                              |
+
+[camera.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/game/client/components/camera.cpp
+[controls.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/game/client/components/controls.cpp
+[config_variables.h]: https://github.com/ddnet/ddnet/blob/20.1.1/src/engine/shared/config_variables.h
+[datafile.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/engine/shared/datafile.cpp
+[mapitems.h]: https://github.com/ddnet/ddnet/blob/20.1.1/src/game/mapitems.h
+[render_layer.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/game/map/render_layer.cpp
+[map_renderer.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/game/map/map_renderer.cpp
+[graphics.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/engine/graphics.cpp
+[backend_opengl3.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/engine/client/backend/opengl/backend_opengl3.cpp
+[graphics_threaded.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/engine/client/graphics_threaded.cpp
+[gamecontroller.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/game/server/gamecontroller.cpp
+[collision.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/game/collision.cpp
+[gamecore.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/game/gamecore.cpp
+[laser.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/game/server/entities/laser.cpp
+[items.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/game/client/components/items.cpp
+[players.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/game/client/components/players.cpp
+[hud.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/game/client/components/hud.cpp
+[render.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/game/client/render.cpp
+[gameclient.cpp]: https://github.com/ddnet/ddnet/blob/20.1.1/src/game/client/gameclient.cpp
+[data/shader]: https://github.com/ddnet/ddnet/tree/20.1.1/data/shader
+
+## Scope
+
+The game view is a camera preview, not a playable game: it shows what you see while aiming, at the default zoom.
+It needs a browser with WebGL 2.
+
+## Privacy
+
+Nothing is sent or saved anywhere else: what you paste, drop or change stays in your browser.
 
 ## License
 
 The code is released under the zlib license (see [LICENSE](LICENSE)).
 The graphics and fonts come from DDNet, Teeworlds and third parties and keep their own licenses
 (see [CREDITS.md](CREDITS.md)).
+
+The code was written with an AI assistant (Claude).
