@@ -252,15 +252,19 @@ const VALUE_NAME = /^(?:cl_dyncam|cl_(?:dyncam|mouse)_[a-z_]+|inp_mousesens)$/;
 const isKnownName = (name) => name === 'cl_dyncam' || name in SETTINGS_BY_NAME;
 
 /**
- * Reads the game console output of ConfigStore.requestText(). Each executed line is printed as "> line",
+ * Reads the game console output of ConfigStore.requestText(). The executed line is printed as "> line",
  * then each name prints "… config: Value: N" in the same order, or "No such command: name." in older versions.
- * Returns null if the text has no "> " line with a known name, else { found: Map(name → value), expected }.
+ * The "> line" can be missing from the selection: the values are then read in the request order,
+ * only when there is one for each name.
+ * Returns null if the text has neither a "> " line with a known name nor a "Value: N" line,
+ * else { found: Map(name → value), expected }.
  */
 function readConsoleOutput(text) {
   const found = new Map();
+  const values = [];
   let queue = [];
   let expected = 0;
-  let isOutput = false;
+  let hasRequestLine = false;
 
   for (const line of text.split(/\r?\n/)) {
     const executed = line.match(/^\s*>\s*(.*)$/);
@@ -270,7 +274,7 @@ function readConsoleOutput(text) {
         .map((part) => part.trim())
         .filter((name) => VALUE_NAME.test(name) && isKnownName(name));
       if (queue.length) {
-        isOutput = true;
+        hasRequestLine = true;
         expected += queue.length;
       }
       continue;
@@ -282,9 +286,17 @@ function readConsoleOutput(text) {
       continue;
     }
     const value = line.match(/Value: (-?\d+)/);
-    if (value && queue.length) found.set(queue.shift(), Number(value[1]));
+    if (!value) continue;
+    values.push(Number(value[1]));
+    if (queue.length) found.set(queue.shift(), Number(value[1]));
   }
-  return isOutput ? { found, expected } : null;
+
+  if (hasRequestLine) return { found, expected };
+  if (!values.length) return null;
+  if (values.length === REQUEST_NAMES.length) {
+    REQUEST_NAMES.forEach((name, index) => found.set(name, values[index]));
+  }
+  return { found, expected: REQUEST_NAMES.length };
 }
 
 /** Reads "name value" pairs of a config file or of console commands. Returns { name: value }. */

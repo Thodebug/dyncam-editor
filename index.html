@@ -14,7 +14,7 @@
     <header class="tab-bar">
       <div class="tab tab-title">
         Dyncam editor
-        <span class="version">v0.16</span>
+        <span class="version">v0.17</span>
       </div>
       <div class="tab-group">
         <button class="tab tab-checkbox" id="dyncam-toggle" type="button" role="switch" aria-checked="true"
@@ -89,7 +89,10 @@
           <div class="load-box" id="load-box" hidden>
             <div class="load-title">From the console</div>
             <ol class="load-steps">
-              <li><button class="button small-button" id="request-button" type="button"><span class="icon">&#xF0C5;</span><span id="request-label">Copy request</span></button></li>
+              <li>Copy this line:
+                <div class="copy-field one-line"><code id="request-line"></code><button class="button small-button" id="request-button" type="button"
+                  aria-label="Copy the line"><span class="icon" id="request-icon">&#xF0C5;</span></button></div>
+              </li>
               <li>In game: F1, Ctrl+V, Enter.</li>
               <li>Select the result with the mouse, Ctrl+C.</li>
               <li>Paste it below.</li>
@@ -146,8 +149,9 @@
           <button class="os-tab" type="button" role="tab" data-os="macos">macOS</button>
         </div>
         <div class="os-panel" role="tabpanel">
-          <div class="os-path"><code id="os-path"></code><button class="button small-button" id="os-path-copy" type="button"><span class="icon">&#xF0C5;</span><span id="os-path-label">Copy</span></button></div>
+          <div class="copy-field"><code id="os-path"></code><button class="button small-button" id="os-path-copy" type="button"><span class="icon">&#xF0C5;</span><span id="os-path-label">Copy</span></button></div>
           <div class="popup-message" id="os-tip"></div>
+          <div class="popup-message">In this folder, open <b>settings_ddnet.cfg</b> with a text editor: Ctrl+A, Ctrl+C, then paste it here. Or drop the file on the page.</div>
         </div>
         <ul class="popup-notes">
           <li>Steam: “Browse local files” opens the game folder, not this one.</li>

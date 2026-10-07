@@ -3,6 +3,8 @@ import { ConfigHelp } from './config-help.js';
 import { copyText, flashLabel } from './clipboard.js';
 
 const UNDO_RESET_MS = 5000;
+const COPY_ICON = '\uF0C5';
+const CHECK_ICON = '\uF00C';
 
 const RESET_LABELS = {
   baseline: { label: 'Reset all', tip: 'Back to your loaded values.' },
@@ -31,6 +33,7 @@ export class CommandsPanel {
     this.resetButton = document.getElementById('reset-button');
     this.resetLabel = document.getElementById('reset-label');
     this.configHelp = new ConfigHelp();
+    document.getElementById('request-line').textContent = ConfigStore.requestText();
     this.stateBeforeReset = null;
     this.undoTimer = 0;
 
@@ -99,15 +102,18 @@ export class CommandsPanel {
     flashLabel(document.getElementById('share-label'), copied ? 'Link copied' : 'Copy the link below', 'Share link', 1800);
   }
 
+  /** Copies the console line that prints the values. If the clipboard is blocked, selects it to copy by hand. */
   async copyRequest() {
-    const request = ConfigStore.requestText();
-    const copied = await copyText(request);
-    if (!copied) {
-      // Show the request in the paste box so it can be copied by hand.
-      this.pasteInput.value = request;
-      this.pasteInput.select();
+    const line = document.getElementById('request-line');
+    const icon = document.getElementById('request-icon');
+    if (await copyText(line.textContent)) {
+      flashLabel(icon, CHECK_ICON, COPY_ICON);
+      return;
     }
-    flashLabel(document.getElementById('request-label'), copied ? 'Copied' : 'Copy the text below', 'Copy request');
+    const range = document.createRange();
+    range.selectNodeContents(line);
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
   }
 
   openLoadBox() {
@@ -128,7 +134,9 @@ export class CommandsPanel {
   /** Loads a pasted text or a dropped file. source names it in the message. */
   loadConfig(text, source) {
     const { source: format, found, expected } = this.store.loadConfigText(text);
-    if (!found) {
+    if (format === 'console' && !found) {
+      this.pasteMessage.textContent = `Select all ${expected} lines of the result, then paste them again.`;
+    } else if (!found) {
       this.pasteMessage.textContent = 'No camera settings found.';
     } else if (format === 'console' && found < expected) {
       this.pasteMessage.textContent = `Loaded ${found} of ${expected} values. Select all the lines next time.`;

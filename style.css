@@ -1095,13 +1095,14 @@ input[type="range"]:active::-webkit-slider-thumb {
   background: var(--page);
 }
 
-.os-path {
+/* A text to copy, with its copy button */
+.copy-field {
   display: flex;
   align-items: center;
   gap: calc(6 * var(--u));
 }
 
-.os-path code {
+.copy-field code {
   flex: 1;
   padding: calc(3 * var(--u)) calc(6 * var(--u));
   border-radius: calc(3 * var(--u));
@@ -1110,6 +1111,18 @@ input[type="range"]:active::-webkit-slider-thumb {
   font-size: calc(11 * var(--u));
   user-select: all;
   overflow-wrap: anywhere;
+}
+
+.copy-field.one-line {
+  margin: calc(2 * var(--u)) 0 calc(3 * var(--u));
+}
+
+.copy-field.one-line code {
+  min-width: 0;
+  overflow: hidden;
+  font-size: calc(10 * var(--u));
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .popup-notes {
