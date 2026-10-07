@@ -6,13 +6,15 @@ Set the [DDNet](https://ddnet.org) camera settings on the real game view, then c
 
 DDNet's menu only has two checkboxes for the camera (Dynamic Camera and Smooth Dynamic Camera). Every other
 setting, like the cursor distance, the deadzone or the follow factor, can only be changed in the console.
-This editor shows what each value does, on the ctf5 map, exactly as the game draws it.
+This editor shows what each value does, on the Teeworlds maps shipped with DDNet, exactly as the game draws them.
 
 ## Features
 
-- The real game view: the ctf5 map file drawn with WebGL like the DDNet client draws it (same shaders, texture
-  filtering, parallax and layer order), the default tee, its weapon and the cursor, at zoom 1,
-  on a 16:9, 16:10, 4:3 or 21:9 screen.
+- The real game view: the map files drawn with WebGL like the DDNet client draws them (same shaders, texture
+  filtering, parallax, group clipping, layer edges and layer order), the default tee, its weapon and the cursor,
+  at zoom 1, on a 16:9, 16:10, 4:3 or 21:9 screen.
+- 13 maps: ctf1 to ctf7, dm1, dm2, dm6 to dm9. The map is kept in share links.
+- **Entities**: only the game tiles, with DDNet's entities image, like the game's entities view.
 - Every `cl_dyncam_*` and `cl_mouse_*` setting, with the game's ranges, defaults and descriptions.
 - The `cl_dyncam` switch shows either camera mode, `cl_dyncam 1` or `cl_dyncam 0`.
 - Camera smoothing (`cl_dyncam_smoothness`, `cl_dyncam_stabilizing`) computed like the game.
@@ -57,7 +59,8 @@ js/
   loading.js            downloads with progress, loading screen
   map-file.js           reader for DDNet .map files
   graphics.js           WebGL 2 drawing with the state and shaders of the DDNet client
-  map-renderer.js       tile and quad layers with their parallax
+  map-renderer.js       tile and quad layers with their parallax, clipping and edges
+  maps.js               the maps, their images and where the tee stands
   settings.js           list of console variables (ranges, defaults, descriptions)
   config-store.js       current values, commands, share link, browser storage
   camera.js             cursor limits and camera smoothing
@@ -75,8 +78,9 @@ js/
   snapshot.js           image of the view with the commands
   tooltip.js            tooltips
 assets/
-  map/                  ctf5.map
-  mapres/               images used by ctf5 (data/mapres of DDNet)
+  map/                  the maps (data/maps of DDNet)
+  mapres/               images used by the maps (data/mapres of DDNet)
+  entities/             DDNet's entities image
   sprites/              tee skin, weapons, particles, menu background fade
   fonts/                DejaVu Sans and icons
   help/                 capture of the DDNet settings menu
@@ -86,7 +90,9 @@ The formulas follow the DDNet source code. Comments in the code name the DDNet f
 
 ## Limits
 
-- One map (ctf5) and zoom 1.
+- Zoom 1 only.
+- Map animations (envelopes) are not played: moving decorations stay at their start position.
+- Flags, pickups and other items of the maps are not drawn.
 - The view needs WebGL 2. The GPU and its driver can change a few pixels, as between two computers in game.
 - When the hook grabs the ground, the game pulls the tee toward it. Here the tee stays in place.
 - The laser and hook use the classic fng tuning: laser reach 800 with one bounce, hook length 380.

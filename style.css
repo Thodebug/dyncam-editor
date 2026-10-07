@@ -258,8 +258,26 @@ textarea {
   text-decoration: none;
 }
 
-/* Screen format list, under its tab */
-.screen-group {
+/* Tighter tabs when the window is not wide enough for all of them */
+@media (max-width: 1440px) {
+  .tab-bar {
+    gap: calc(5 * var(--u));
+  }
+
+  .tab {
+    padding: 0 calc(9 * var(--u));
+  }
+}
+
+/* The GitHub tab keeps only its icon */
+@media (max-width: 1279px) {
+  .tab-link .tab-link-text {
+    display: none;
+  }
+}
+
+/* Screen format and map lists, under their tab */
+.menu-group {
   position: relative;
 }
 
@@ -1145,7 +1163,7 @@ input[type="range"]:active::-webkit-slider-thumb {
 /* ---------- Narrow windows ---------- */
 
 /* The view on top, the settings below, the whole page scrolls */
-@media (max-width: 1000px) {
+@media (max-width: 1220px) {
   .screen {
     height: auto;
     min-height: 100vh;

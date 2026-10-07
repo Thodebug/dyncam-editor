@@ -20,8 +20,8 @@ export const SCREEN_FORMATS = [
 /** Number of drawings over the game kept as textures for each kind (circles, labels, help text). */
 const OVERLAY_CACHE_SIZE = 16;
 
-/** The tee stands on the ctf5 platform at tile (162, 55). */
-export const TEE_POSITION = { x: 5200, y: 1777 };
+/** cl_background_color and cl_background_entities_color (HSLA 0, 0, 128): the gray the game clears the screen with. */
+const BACKGROUND_GRAY = 128 / 255;
 
 /**
  * The game view as DDNet renders it: map, laser, hook, tee, map foreground and cursor, drawn with WebGL.
@@ -30,16 +30,17 @@ export const TEE_POSITION = { x: 5200, y: 1777 };
 export class GameView {
   /**
    * graphics: Graphics, map: MapRenderer, renderer: TeeRenderer, store: ConfigStore,
-   * pointer: PointerInput, player: Player
+   * pointer: PointerInput, player: Player, tee: { x, y } where the tee stands
    */
-  constructor({ canvas, graphics, map, renderer, store, pointer, player }) {
+  constructor({ canvas, graphics, map, renderer, store, pointer, player, tee }) {
     this.canvas = canvas;
     this.graphics = graphics;
-    this.map = map;
     this.renderer = renderer;
     this.store = store;
     this.pointer = pointer;
+    this.map = map;
     this.player = player;
+    this.tee = tee;
     this.camera = new CameraSmoothing();
 
     this.showDistances = false;
@@ -72,6 +73,14 @@ export class GameView {
       this.contextLost = false;
       this.requestRender();
     });
+  }
+
+  /** Shows another map: its MapRenderer, the Player using its collision, and where the tee stands. */
+  setMap({ map, player, tee }) {
+    this.map = map;
+    this.player = player;
+    this.tee = tee;
+    this.requestRender();
   }
 
   requestRender() {
@@ -120,11 +129,12 @@ export class GameView {
 
     graphics.setViewport(width, height);
     graphics.setBlend('normal');
-    graphics.clear(0, 0, 0);
+    graphics.clear(BACKGROUND_GRAY, BACKGROUND_GRAY, BACKGROUND_GRAY);
 
     // Map behind the players, then the laser, the hook and the tee, then the map in front (CGameClient::OnRender order)
-    const center = { x: TEE_POSITION.x + offset.x, y: TEE_POSITION.y + offset.y };
-    this.map.render('background', center, this.aspect);
+    const center = { x: this.tee.x + offset.x, y: this.tee.y + offset.y };
+    const entities = this.store.entities;
+    this.map.render('background', center, this.aspect, 1, entities);
 
     const world = mapScreenToWorld(center.x, center.y, 100, 100, 100, 0, 0, this.aspect, 1);
     graphics.mapScreen(world.left, world.top, world.right, world.bottom);
@@ -134,10 +144,10 @@ export class GameView {
       this.renderer.drawLaser(segment.from, segment.to, segment.width, tick);
     }
     const hookPosition = this.player.hook.positionAt(tick);
-    if (hookPosition) this.renderer.drawHook(TEE_POSITION, hookPosition);
-    this.renderer.drawPlayer(TEE_POSITION, cursor.direction, this.player.weapon, this.player.pose(now));
+    if (hookPosition) this.renderer.drawHook(this.tee, hookPosition);
+    this.renderer.drawPlayer(this.tee, cursor.direction, this.player.weapon, this.player.pose(now));
 
-    this.map.render('foreground', center, this.aspect);
+    this.map.render('foreground', center, this.aspect, 1, entities);
 
     // Distance circles around the tee, all of them or the one of the hovered setting
     graphics.mapScreen(0, 0, width, height);
@@ -147,7 +157,7 @@ export class GameView {
 
     // The cursor is part of the HUD, drawn at zoom 1 (CHud::RenderCursor())
     graphics.mapScreen(world.left, world.top, world.right, world.bottom);
-    const target = { x: TEE_POSITION.x + cursor.position.x, y: TEE_POSITION.y + cursor.position.y };
+    const target = { x: this.tee.x + cursor.position.x, y: this.tee.y + cursor.position.y };
     this.renderer.drawCursor(target, this.player.weapon);
 
     const hint = hideHint ? '' : this.pointer.hint();

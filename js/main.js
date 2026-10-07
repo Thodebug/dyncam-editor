@@ -5,7 +5,7 @@ import { setupTooltips } from './tooltip.js';
 import { CollisionMap } from './collision.js';
 import { Player } from './player.js';
 import { TeeRenderer } from './tee-renderer.js';
-import { GameView, SCREEN_FORMATS, TEE_POSITION } from './game-view.js';
+import { GameView, SCREEN_FORMATS } from './game-view.js';
 import { PointerInput } from './pointer.js';
 import { SnapshotButton } from './snapshot.js';
 import { cameraOffsetAt } from './camera.js';
@@ -13,15 +13,15 @@ import { LoadingScreen, downloadFiles, imageFromBlob } from './loading.js';
 import { Graphics, WebGLUnavailableError } from './graphics.js';
 import { readMap } from './map-file.js';
 import { MapRenderer } from './map-renderer.js';
+import { MAPS, MAPS_BY_ID } from './maps.js';
 
-const MAP_FILE = 'assets/map/ctf5.map';
-/** The images of data/mapres used by ctf5 */
-const MAP_IMAGES = ['bg_cloud1', 'bg_cloud2', 'generic_unhookable', 'grass_doodads', 'grass_main'];
 const SPRITE_IMAGES = {
   skin: 'assets/sprites/skin-default.png',
   game: 'assets/sprites/game.png',
   particles: 'assets/sprites/particles.png',
 };
+/** data/editor/entities_clear/ddnet.png with the tiles DDNet hides on DDNet servers already removed */
+const ENTITIES_IMAGE = 'assets/entities/ddnet.png';
 
 /** Gives the browser a frame to show the loading screen. */
 const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)));
@@ -36,7 +36,7 @@ function viewAspect(store) {
 /** The game view takes the full height of the page; the settings column gets the remaining width. */
 function fitPageLayout(aspect) {
   const page = document.querySelector('.page');
-  if (!matchMedia('(min-width: 1001px)').matches) {
+  if (!matchMedia('(min-width: 1221px)').matches) {
     page.style.gridTemplateColumns = '';
     return;
   }
@@ -72,23 +72,27 @@ function signed(value) {
   return '0';
 }
 
-/** The screen format tab: a list of formats under the tab, the chosen one is kept in the store. */
-function setupScreenMenu(store) {
-  const button = byId('screen-button');
-  const menu = byId('screen-menu');
+/**
+ * A tab with a list under it (screen format, map): `options` is [{ id, label }],
+ * chosen() gives the chosen id and choose(id) changes it. Returns the function that shows the chosen option.
+ */
+function setupTabMenu({ group, options, chosen, choose }) {
+  const button = group.querySelector('.tab-menu');
+  const label = group.querySelector('.tab-menu-label');
+  const menu = group.querySelector('.menu');
   const close = () => {
     menu.hidden = true;
     button.setAttribute('aria-expanded', 'false');
   };
 
-  for (const format of SCREEN_FORMATS) {
+  for (const { id, label: text } of options) {
     const option = document.createElement('button');
     option.type = 'button';
     option.setAttribute('role', 'option');
-    option.dataset.format = format.id;
-    option.textContent = format.label;
+    option.dataset.id = id;
+    option.textContent = text;
     option.addEventListener('click', () => {
-      store.setScreenFormat(format.id);
+      choose(id);
       close();
     });
     menu.appendChild(option);
@@ -99,17 +103,24 @@ function setupScreenMenu(store) {
     button.setAttribute('aria-expanded', String(!menu.hidden));
   });
   document.addEventListener('pointerdown', (event) => {
-    if (!event.target.closest('.screen-group')) close();
+    if (!group.contains(event.target)) close();
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') close();
   });
 
   return () => {
-    const format = SCREEN_FORMATS.find((item) => item.id === store.screenFormat) ?? SCREEN_FORMATS[0];
-    byId('screen-label').textContent = format.label;
-    for (const option of menu.children) option.setAttribute('aria-selected', String(option.dataset.format === format.id));
+    const id = chosen();
+    label.textContent = options.find((option) => option.id === id)?.label ?? id;
+    for (const option of menu.children) option.setAttribute('aria-selected', String(option.dataset.id === id));
   };
+}
+
+/** The game layer of a map, for the collision. */
+function gameLayerOf(map) {
+  const gameLayer = map.groups.flatMap((group) => group.layers).find((layer) => layer.type === 'tiles' && layer.game);
+  if (!gameLayer) throw new Error('The map has no game layer');
+  return gameLayer;
 }
 
 async function start() {
@@ -119,7 +130,18 @@ async function start() {
   let gameView = null;
   const fitLayout = () => fitPageLayout(viewAspect(store));
   addEventListener('resize', fitLayout);
-  const updateScreenMenu = setupScreenMenu(store);
+  const updateScreenMenu = setupTabMenu({
+    group: byId('screen-group'),
+    options: SCREEN_FORMATS,
+    chosen: () => (SCREEN_FORMATS.find((format) => format.id === store.screenFormat) ?? SCREEN_FORMATS[0]).id,
+    choose: (id) => store.setScreenFormat(id),
+  });
+  const updateMapMenu = setupTabMenu({
+    group: byId('map-group'),
+    options: MAPS.map((map) => ({ id: map.id, label: map.id })),
+    chosen: () => store.mapId,
+    choose: (id) => store.setMap(id),
+  });
 
   const settingsPanel = new SettingsPanel({
     store,
@@ -132,13 +154,19 @@ async function start() {
   const commandsPanel = new CommandsPanel({ store, onLoaded: (names) => settingsPanel.highlight(names) });
 
   const dyncamToggle = byId('dyncam-toggle');
+  const entitiesToggle = byId('entities-toggle');
   const stage = byId('stage');
   let shownAspect = null;
+  // Set once the game view is ready: shows the store's map, downloading it if needed.
+  let showStoreMap = null;
   store.onChange(() => {
     settingsPanel.update();
     commandsPanel.update();
     setSwitch(dyncamToggle, store.dyncam);
+    setSwitch(entitiesToggle, store.entities);
     updateScreenMenu();
+    updateMapMenu();
+    showStoreMap?.();
 
     const aspect = viewAspect(store);
     if (aspect !== shownAspect) {
@@ -150,6 +178,7 @@ async function start() {
     gameView?.requestRender();
   });
   dyncamToggle.addEventListener('click', () => store.setDyncam(!store.dyncam));
+  entitiesToggle.addEventListener('click', () => store.setEntities(!store.entities));
 
   // The last state saved in the browser keeps the user's baseline; the values of a share link replace its values.
   const loadLinkedConfig = () => store.loadShareToken(location.hash.replace(/^#/, ''));
@@ -164,42 +193,81 @@ async function start() {
   // Game view
   const loadingScreen = new LoadingScreen(byId('loading'));
   const canvas = byId('game-canvas');
-  let graphics;
-  let mapRenderer;
-  let teeRenderer;
-  let collision;
-  const steps = 3;
-  try {
-    const mapImageUrls = Object.fromEntries(MAP_IMAGES.map((name) => [name, `assets/mapres/${name}.png`]));
-    const [files] = await Promise.all([
-      downloadFiles({ map: MAP_FILE, ...mapImageUrls, ...SPRITE_IMAGES }, (progress) =>
-        loadingScreen.showDownload(progress),
-      ),
-      document.fonts.load('12px "DejaVu Sans"').catch(() => {}),
+  const files = new Map(); // url → Blob: each file is downloaded once
+  let graphics = null;
+  let teeRenderer = null;
+  let entitiesImage = null;
+  let pointer = null;
+
+  /** Downloads the files not downloaded yet, with the loading screen. urls: { key: url }. Returns { key: Blob }. */
+  const download = async (urls, mapName) => {
+    const missing = Object.fromEntries(Object.entries(urls).filter(([, url]) => !files.has(url)));
+    if (Object.keys(missing).length) {
+      loadingScreen.start(mapName);
+      const blobs = await downloadFiles(missing, (progress) => loadingScreen.showDownload(progress));
+      for (const [key, url] of Object.entries(missing)) files.set(url, blobs[key]);
+    }
+    return Object.fromEntries(Object.entries(urls).map(([key, url]) => [key, files.get(url)]));
+  };
+
+  /** Downloads and prepares a map, then shows it. The first map also prepares WebGL and the tee's images. */
+  const loadMap = async (id) => {
+    const info = MAPS_BY_ID[id];
+    const imageUrls = Object.fromEntries(info.images.map((name) => [name, `assets/mapres/${name}.png`]));
+    const firstMap = !graphics;
+    const steps = firstMap ? 3 : 2;
+    const [downloaded] = await Promise.all([
+      download({ map: `assets/map/${id}.map`, ...imageUrls, ...(firstMap ? { ...SPRITE_IMAGES, entities: ENTITIES_IMAGE } : {}) }, id),
+      firstMap ? document.fonts.load('12px "DejaVu Sans"').catch(() => {}) : null,
     ]);
     loadingScreen.showPreparing(0, steps);
     const decode = async (keys) =>
-      Object.fromEntries(await Promise.all(keys.map(async (key) => [key, await imageFromBlob(files[key])])));
+      Object.fromEntries(await Promise.all(keys.map(async (key) => [key, await imageFromBlob(downloaded[key])])));
     const [map, mapImages, spriteImages] = await Promise.all([
-      files.map.arrayBuffer().then(readMap),
-      decode(MAP_IMAGES),
-      decode(Object.keys(SPRITE_IMAGES)),
+      downloaded.map.arrayBuffer().then(readMap),
+      decode(info.images),
+      firstMap ? decode([...Object.keys(SPRITE_IMAGES), 'entities']) : null,
     ]);
     loadingScreen.showPreparing(1, steps);
     await nextFrame();
-    graphics = new Graphics(canvas);
+    if (firstMap) {
+      graphics = new Graphics(canvas);
+      entitiesImage = spriteImages.entities;
+      teeRenderer = new TeeRenderer(graphics, spriteImages);
+      loadingScreen.showPreparing(2, steps);
+      await nextFrame();
+    }
+    const mapRenderer = new MapRenderer(graphics, map, mapImages, entitiesImage);
+    const player = new Player(CollisionMap.fromGameLayer(gameLayerOf(map)), info.tee);
+    loadingScreen.showPreparing(steps, steps);
 
-    mapRenderer = new MapRenderer(graphics, map, mapImages);
-    loadingScreen.showPreparing(2, steps);
-    await nextFrame();
-    teeRenderer = new TeeRenderer(graphics, spriteImages);
-    loadingScreen.showPreparing(3, steps);
+    if (gameView) {
+      gameView.map.dispose();
+      pointer.player = player;
+      gameView.setMap({ map: mapRenderer, player, tee: info.tee });
+      return;
+    }
+    pointer = new PointerInput({
+      canvas,
+      stage,
+      store,
+      player,
+      getScreen: () => gameView.screen,
+      onChange: () => gameView.requestRender(),
+    });
+    gameView = new GameView({
+      canvas,
+      graphics,
+      map: mapRenderer,
+      renderer: teeRenderer,
+      store,
+      pointer,
+      player,
+      tee: info.tee,
+    });
+  };
 
-    const layers = map.groups.flatMap((group) => group.layers);
-    const gameLayer = layers.find((layer) => layer.type === 'tiles' && layer.game);
-    if (!gameLayer) throw new Error('The map has no game layer');
-    collision = CollisionMap.fromGameLayer(gameLayer);
-  } catch (error) {
+  const showLoadError = (error) => {
     if (error instanceof WebGLUnavailableError) {
       loadingScreen.showError(
         'WebGL 2 is not available in this browser.',
@@ -208,19 +276,41 @@ async function start() {
     } else {
       loadingScreen.showError();
     }
+  };
+
+  // Loads maps one at a time, until the map shown is the store's map.
+  let shownMapId = null;
+  let loading = false;
+  const loadStoreMap = async () => {
+    if (loading) return;
+    loading = true;
+    try {
+      while (store.mapId !== shownMapId) {
+        const id = store.mapId;
+        await loadMap(id);
+        shownMapId = id;
+      }
+      // The first map's loading screen stays until the view is drawn.
+      if (showStoreMap) loadingScreen.hide();
+    } finally {
+      loading = false;
+    }
+  };
+
+  try {
+    await loadStoreMap();
+  } catch (error) {
+    showLoadError(error);
     throw error;
   }
+  showStoreMap = () => {
+    if (store.mapId === shownMapId) return;
+    loadStoreMap().catch((error) => {
+      showLoadError(error);
+      console.error(error);
+    });
+  };
 
-  const player = new Player(collision, TEE_POSITION);
-  const pointer = new PointerInput({
-    canvas,
-    stage,
-    store,
-    player,
-    getScreen: () => gameView.screen,
-    onChange: () => gameView.requestRender(),
-  });
-  gameView = new GameView({ canvas, graphics, map: mapRenderer, renderer: teeRenderer, store, pointer, player });
   gameView.setAspect(viewAspect(store));
   new SnapshotButton({ gameView, store });
 

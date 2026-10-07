@@ -1,6 +1,3 @@
-/** Map name shown while loading, as in DDNet's "Downloading map: <name>". */
-const MAP_NAME = 'ctf5';
-
 /** Decodes an image file. */
 export async function imageFromBlob(blob) {
   const url = URL.createObjectURL(blob);
@@ -68,6 +65,15 @@ export class LoadingScreen {
     [this.detail, this.secondDetail] = element.querySelectorAll('.loading-detail');
     this.bar = element.querySelector('.loading-bar');
     this.startTime = performance.now();
+    this.mapName = '';
+  }
+
+  /** Shows the screen for a map download. The name appears as in DDNet's "Downloading map: <name>". */
+  start(mapName) {
+    this.mapName = mapName;
+    this.startTime = performance.now();
+    this.element.classList.remove('is-error');
+    this.element.hidden = false;
   }
 
   /** A title, one or two lines of detail, and a progress bar from 0 to 1 (none when null). */
@@ -82,7 +88,7 @@ export class LoadingScreen {
 
   /** CMenus::RenderPopupLoading() while the map downloads: "<received>/<total> KiB (<speed> KiB/s)". */
   showDownload({ loaded, total, filesDone, fileCount }) {
-    const title = `Downloading map: ${MAP_NAME}`;
+    const title = `Downloading map: ${this.mapName}`;
     if (total === null) {
       this.show(title, '', filesDone / fileCount);
       return;

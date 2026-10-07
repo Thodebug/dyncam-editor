@@ -8,6 +8,7 @@ import {
   clampToRange,
   defaultValues,
 } from './settings.js';
+import { DEFAULT_MAP, isMapId } from './maps.js';
 
 const STORAGE_KEY = 'dyncam-editor';
 const SAVE_DELAY_MS = 300;
@@ -23,6 +24,8 @@ export class ConfigStore {
     this.dyncam = true;
     this.baseline = ConfigStore.defaultBaseline();
     this.screenFormat = '16:9';
+    this.mapId = DEFAULT_MAP;
+    this.entities = false;
     this.listeners = [];
     this.saveTimer = 0;
   }
@@ -38,6 +41,19 @@ export class ConfigStore {
   notify() {
     for (const listener of this.listeners) listener();
     this.scheduleSave();
+  }
+
+  /** Map shown in the game view. Kept in the browser and in share links. */
+  setMap(id) {
+    if (!isMapId(id) || id === this.mapId) return;
+    this.mapId = id;
+    this.notify();
+  }
+
+  /** Entities view (cl_overlay_entities 100). Kept in the browser, not in share links. */
+  setEntities(enabled) {
+    this.entities = enabled;
+    this.notify();
   }
 
   set(name, value) {
@@ -181,19 +197,22 @@ export class ConfigStore {
   /* ---------- Share link ---------- */
 
   /**
-   * Link fragment: "s" + cl_dyncam + the camera settings, separated by dots.
+   * Link fragment: "s" + cl_dyncam + the camera settings + the map, separated by dots.
    * Only letters, digits and dots are used so the fragment survives every host.
+   * Links made before maps were added have no map: the map shown does not change.
    */
   shareToken() {
     const numbers = [this.dyncam ? 1 : 0, ...CAMERA_SETTINGS.map((setting) => this.values[setting.name])];
-    return 's' + numbers.join('.');
+    return 's' + numbers.join('.') + '.' + this.mapId;
   }
 
   /** Applies a share token. Returns false if the token is not valid. */
   loadShareToken(token) {
-    if (!/^s\d+(\.\d+)*$/.test(token)) return false;
-    const [dyncam, ...numbers] = token.slice(1).split('.').map(Number);
+    const match = token.match(/^s(\d+(?:\.\d+)*)(?:\.([a-z][a-z0-9]*))?$/);
+    if (!match) return false;
+    const [dyncam, ...numbers] = match[1].split('.').map(Number);
     if (numbers.length !== CAMERA_SETTINGS.length) return false;
+    if (isMapId(match[2])) this.mapId = match[2];
 
     const values = Object.fromEntries(CAMERA_SETTINGS.map((setting, index) => [setting.name, numbers[index]]));
     this.replaceValues({ ...values, inp_mousesens: this.values.inp_mousesens });
@@ -215,6 +234,8 @@ export class ConfigStore {
       dyncam: this.dyncam,
       baseline: this.baseline,
       screenFormat: this.screenFormat,
+      mapId: this.mapId,
+      entities: this.entities,
     };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -236,6 +257,8 @@ export class ConfigStore {
     if (data.values && typeof data.values === 'object') this.replaceValues(data.values);
     if (typeof data.dyncam === 'boolean') this.dyncam = data.dyncam;
     if (typeof data.screenFormat === 'string') this.screenFormat = data.screenFormat;
+    if (isMapId(data.mapId)) this.mapId = data.mapId;
+    if (typeof data.entities === 'boolean') this.entities = data.entities;
     if (data.baseline && typeof data.baseline === 'object') {
       const baseline = ConfigStore.defaultBaseline();
       for (const name of Object.keys(baseline)) {

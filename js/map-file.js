@@ -122,7 +122,7 @@ function readQuads(bytes, count) {
 
 /**
  * Reads a map. Returns:
- * images: [{ name, external }] (embedded image data is not supported)
+ * images: [{ name, external }], with { width, height, data } (RGBA bytes) for images embedded in the map
  * groups: [{ offsetX, offsetY, parallaxX, parallaxY, clip, layers }]
  * layer: { type: 'tiles', game, detail, width, height, color, image, tiles } where tiles holds
  *        (index, flags, skip, 0) for each tile, or { type: 'quads', detail, image, quads }
@@ -131,10 +131,12 @@ export async function readMap(buffer) {
   const file = new Datafile(buffer);
 
   const images = await Promise.all(
-    file.itemsOfType(ITEM_TYPE_IMAGE).map(async (item) => ({
-      external: item[3] !== 0,
-      name: await file.string(item[4]),
-    })),
+    // CMapItemImage: version, width, height, external, name, data (RGBA bytes for embedded images)
+    file.itemsOfType(ITEM_TYPE_IMAGE).map(async (item) => {
+      const image = { external: item[3] !== 0, name: await file.string(item[4]) };
+      if (!image.external) Object.assign(image, { width: item[1], height: item[2], data: await file.dataBlock(item[5]) });
+      return image;
+    }),
   );
 
   const layerItems = file.itemsOfType(ITEM_TYPE_LAYER);

@@ -14,7 +14,7 @@
     <header class="tab-bar">
       <div class="tab tab-title">
         Dyncam editor
-        <span class="version">v0.18</span>
+        <span class="version">v0.19</span>
       </div>
       <div class="tab-group">
         <button class="tab tab-checkbox" id="dyncam-toggle" type="button" role="switch" aria-checked="true"
@@ -34,15 +34,27 @@
           <span class="checkbox"><span class="icon">&#xF00D;</span></span>Show distances
         </button>
       </div>
-      <div class="tab-group screen-group">
-        <button class="tab tab-menu" id="screen-button" type="button" aria-haspopup="listbox" aria-expanded="false"
-          data-tip="Your game window format.">
-          <span class="icon">&#xF390;</span><span id="screen-label">16:9</span><span class="icon tab-caret">&#xF078;</span>
+      <div class="tab-group">
+        <button class="tab tab-checkbox" id="entities-toggle" type="button" role="switch" aria-checked="false"
+          data-tip="Only the game tiles, like DDNet's entities view.">
+          <span class="checkbox"><span class="icon">&#xF00D;</span></span>Entities
         </button>
-        <div class="menu" id="screen-menu" role="listbox" aria-label="Screen format" hidden></div>
+      </div>
+      <div class="tab-group menu-group" id="screen-group">
+        <button class="tab tab-menu" type="button" aria-haspopup="listbox" aria-expanded="false"
+          data-tip="Your game window format.">
+          <span class="icon">&#xF390;</span><span class="tab-menu-label">16:9</span><span class="icon tab-caret">&#xF078;</span>
+        </button>
+        <div class="menu" role="listbox" aria-label="Screen format" hidden></div>
+      </div>
+      <div class="tab-group menu-group" id="map-group">
+        <button class="tab tab-menu" type="button" aria-haspopup="listbox" aria-expanded="false" data-tip="Map">
+          <span class="icon">&#xF279;</span><span class="tab-menu-label">ctf5</span><span class="icon tab-caret">&#xF078;</span>
+        </button>
+        <div class="menu" role="listbox" aria-label="Map" hidden></div>
       </div>
       <a class="tab tab-link" href="https://github.com/Thodebug/dyncam-editor" target="_blank" rel="noopener"
-        data-tip="Source code and issues"><span class="icon">&#xF121;</span>GitHub</a>
+        data-tip="Source code and issues" aria-label="GitHub"><span class="icon">&#xF121;</span><span class="tab-link-text">GitHub</span></a>
     </header>
 
     <main class="page">
@@ -61,7 +73,7 @@
               <div class="loading-tiles"></div>
               <div class="loading-blob"></div>
               <div class="loading-box" role="status">
-                <div class="loading-title">Downloading map: ctf5</div>
+                <div class="loading-title">Downloading map</div>
                 <div class="loading-detail"></div>
                 <div class="loading-detail" hidden></div>
                 <div class="loading-bar"><div class="loading-bar-fill"></div></div>

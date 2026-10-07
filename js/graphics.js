@@ -55,6 +55,41 @@ void main() {
   FragClr = texture(gTextureSampler, TexCoord, ${LOD_BIAS.toFixed(1)}) * gVertColor;
 }`;
 
+/**
+ * Tiles repeated past the edge of a tile layer (data/shader/tile_border.vert and .frag):
+ * the edge tile is stretched by gScale and moved by gOffset, its texture repeats with fract().
+ * textureGrad() keeps the mipmap level of the unrepeated coordinates; the LOD bias scales the gradients.
+ */
+const VERTEX_TILE_BORDER = `#version 300 es
+layout (location = 0) in vec2 inVertex;
+layout (location = 1) in uvec4 inVertexTexCoord;
+uniform mat4x2 gPos;
+uniform vec2 gOffset;
+uniform vec2 gScale;
+centroid out vec3 TexCoord;
+void main() {
+  vec2 VertexPos = (inVertex * gScale) + gOffset;
+  gl_Position = vec4(gPos * vec4(VertexPos, 0.0, 1.0), 0.0, 1.0);
+  vec2 TexScale = gScale;
+  if (float(inVertexTexCoord.w) > 0.0) TexScale = gScale.yx;
+  TexCoord = vec3(vec2(inVertexTexCoord.xy) * TexScale, float(inVertexTexCoord.z));
+}`;
+
+const FRAGMENT_TILE_BORDER = `#version 300 es
+precision highp float;
+precision highp sampler2DArray;
+uniform sampler2DArray gTextureSampler;
+uniform vec4 gVertColor;
+centroid in vec3 TexCoord;
+out vec4 FragClr;
+void main() {
+  vec3 realTexCoords = vec3(fract(TexCoord.xy), TexCoord.z);
+  float bias = exp2(${LOD_BIAS.toFixed(1)});
+  vec2 dx = dFdx(TexCoord.xy) * bias;
+  vec2 dy = dFdy(TexCoord.xy) * bias;
+  FragClr = textureGrad(gTextureSampler, realTexCoords, dx, dy) * gVertColor;
+}`;
+
 /** Map quads: position and rotation center, color, texture coordinates (data/shader/quad.vert, grouped). */
 const VERTEX_QUAD = `#version 300 es
 layout (location = 0) in vec4 inVertex;
@@ -155,6 +190,7 @@ export class Graphics {
     this.programs = {
       primitive: this.createProgram(VERTEX_PRIMITIVE, FRAGMENT_PRIMITIVE),
       tile: this.createProgram(VERTEX_TILE, FRAGMENT_TILE),
+      tileBorder: this.createProgram(VERTEX_TILE_BORDER, FRAGMENT_TILE_BORDER),
       quad: this.createProgram(VERTEX_QUAD, FRAGMENT_QUAD),
       ring: this.createProgram(VERTEX_RING, FRAGMENT_RING),
     };
@@ -264,6 +300,13 @@ export class Graphics {
     this.gl.deleteTexture(texture.texture);
   }
 
+  /** Frees a buffer made by createTileBuffer() or createQuadBuffer(). */
+  deleteBuffer(buffer) {
+    const gl = this.gl;
+    gl.deleteVertexArray(buffer.array);
+    for (const glBuffer of buffer.glBuffers) gl.deleteBuffer(glBuffer);
+  }
+
   /** The tileset of a tile layer as a 2D array texture of 256 tiles (Texture2DTo3D()), with mipmaps. */
   createTileArrayTexture(pixels) {
     const gl = this.gl;
@@ -298,6 +341,32 @@ export class Graphics {
   /** Matches the drawing buffer to the canvas size. */
   setViewport(width, height) {
     this.gl.viewport(0, 0, width, height);
+  }
+
+  /**
+   * IGraphics::ClipEnable(): only the canvas pixels from (x, y), `width` × `height`, counted from the top left, are drawn.
+   * The rectangle is cut to the canvas like CGraphics_Threaded::ClipEnable().
+   */
+  clip(x, y, width, height) {
+    this.flush();
+    const gl = this.gl;
+    const screenWidth = gl.drawingBufferWidth;
+    const screenHeight = gl.drawingBufferHeight;
+    if (x < 0) width += x;
+    if (y < 0) height += y;
+    const clamp = (value, max) => Math.min(Math.max(value, 0), max);
+    x = clamp(x, screenWidth);
+    y = clamp(y, screenHeight);
+    width = clamp(width, screenWidth - x);
+    height = clamp(height, screenHeight - y);
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(x, screenHeight - (y + height), width, height);
+  }
+
+  /** IGraphics::ClipDisable() */
+  unclip() {
+    this.flush();
+    this.gl.disable(this.gl.SCISSOR_TEST);
   }
 
   clear(red, green, blue) {
@@ -380,16 +449,18 @@ export class Graphics {
   /**
    * Static tile layer buffers: `tiles` is [{ x, y, index, flags }] in tiles, row by row, for a layer `height` tiles high.
    * Each tile is a quad of 32 units, with texture coordinates turned by the tile flags
-   * (FillTmpTile() in src/game/map/render_layer.cpp).
+   * (FillTmpTile() in src/game/map/render_layer.cpp). A tile can have offsetX and offsetY in units,
+   * like the edge tiles of AddTile() used for the layer borders.
+   * Only the first `rowTileCount` tiles are drawn by drawTileLayer(); the others are drawn with drawBorderTiles().
    */
-  createTileBuffer(tiles, height) {
+  createTileBuffer(tiles, height, rowTileCount = tiles.length) {
     const gl = this.gl;
     const positions = new Float32Array(tiles.length * 8);
     const texcoords = new Uint8Array(tiles.length * 16);
     const indices = new Uint32Array(tiles.length * 6);
     tiles.forEach((tile, i) => {
-      const left = tile.x * 32;
-      const top = tile.y * 32;
+      const left = tile.x * 32 + (tile.offsetX ?? 0);
+      const top = tile.y * 32 + (tile.offsetY ?? 0);
       // Top left, top right, bottom right, bottom left
       positions.set([left, top, left + 32, top, left + 32, top + 32, left, top + 32], i * 8);
       const { texX, texY } = tileTexCoords(tile.flags);
@@ -401,7 +472,7 @@ export class Graphics {
     });
     // rowStarts[y]: number of tiles before row y
     const rowStarts = new Uint32Array(height + 1);
-    for (const tile of tiles) rowStarts[tile.y + 1]++;
+    for (const tile of tiles.slice(0, rowTileCount)) rowStarts[tile.y + 1]++;
     for (let y = 0; y < height; y++) rowStarts[y + 1] += rowStarts[y];
 
     const array = gl.createVertexArray();
@@ -420,7 +491,7 @@ export class Graphics {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
-    return { array, rowStarts, height };
+    return { array, rowStarts, height, glBuffers: [positionBuffer, texcoordBuffer, indexBuffer] };
   }
 
   /**
@@ -441,6 +512,26 @@ export class Graphics {
     this.bindTexture(gl.TEXTURE_2D_ARRAY, texture.texture);
     gl.uniform1i(program.uniforms.gTextureSampler, 0);
     gl.uniform4fv(program.uniforms.gVertColor, color);
+    gl.bindVertexArray(buffer.array);
+    gl.drawElements(gl.TRIANGLES, count * 6, gl.UNSIGNED_INT, first * 6 * 4);
+    gl.bindVertexArray(null);
+  }
+
+  /**
+   * CCommandProcessorFragment_OpenGL3_3::Cmd_RenderBorderTile(): `count` tiles of a tile buffer from tile `first`,
+   * each stretched by scale [x, y] and moved by offset [x, y] in units.
+   */
+  drawBorderTiles(buffer, texture, color, first, count, offset, scale) {
+    if (count <= 0) return;
+    this.flush();
+    const gl = this.gl;
+    const program = this.programs.tileBorder;
+    this.useProgram(program);
+    this.bindTexture(gl.TEXTURE_2D_ARRAY, texture.texture);
+    gl.uniform1i(program.uniforms.gTextureSampler, 0);
+    gl.uniform4fv(program.uniforms.gVertColor, color);
+    gl.uniform2fv(program.uniforms.gOffset, offset);
+    gl.uniform2fv(program.uniforms.gScale, scale);
     gl.bindVertexArray(buffer.array);
     gl.drawElements(gl.TRIANGLES, count * 6, gl.UNSIGNED_INT, first * 6 * 4);
     gl.bindVertexArray(null);
@@ -486,7 +577,7 @@ export class Graphics {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
-    return { array, count: indices.length };
+    return { array, count: indices.length, glBuffers: [vertexBuffer, indexBuffer] };
   }
 
   /** CCommandProcessorFragment_OpenGL3_3::Cmd_RenderQuadLayer() for quads without envelopes. */
