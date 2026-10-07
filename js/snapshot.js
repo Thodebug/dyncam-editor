@@ -53,7 +53,6 @@ export function renderSnapshot(viewCanvas, lines, font, backgroundColor) {
   context.roundRect(left - 12, PADDING + 56, panelWidth - PADDING * 2 + 24, listHeight, 8);
   context.fill();
 
-  if (!lines.length) drawText('No changes', left, listTop, FONT_SIZE, 0.5);
   lines.forEach((line, index) => {
     drawText(`${line.name} ${line.value}`, left, listTop + index * LINE_HEIGHT, FONT_SIZE, line.changed ? 1 : 0.5);
   });

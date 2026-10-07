@@ -1,5 +1,14 @@
-const FEEDBACK_MS = 1600;
+import { ConfigStore } from './config-store.js';
+import { ConfigHelp } from './config-help.js';
+import { copyText, flashLabel } from './clipboard.js';
+
 const UNDO_RESET_MS = 5000;
+
+const RESET_LABELS = {
+  baseline: { label: 'Reset all', tip: 'Back to your loaded values.' },
+  defaults: { label: 'Reset to defaults', tip: 'Back to the DDNet defaults.' },
+  all: { label: 'Reset all', tip: 'Back to the DDNet defaults.' },
+};
 
 /** Page address used in share links: the canonical URL if the page declares one, else the current address. */
 function pageAddress() {
@@ -8,45 +17,30 @@ function pageAddress() {
   return location.origin + location.pathname;
 }
 
-/** Copies text to the clipboard. Returns true on success. */
-async function copyText(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
+const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
-/** Shows a temporary label on a button, then the original one. */
-function flashLabel(label, text, originalText, duration = FEEDBACK_MS) {
-  label.textContent = text;
-  setTimeout(() => {
-    label.textContent = originalText;
-  }, duration);
-}
-
-/** The Commands section: command list, Changes only, Copy, Share link, Paste config and Reset all. */
+/** The Commands section: command list, Copy, Share link, Load from game and Reset all. */
 export class CommandsPanel {
   constructor({ store }) {
     this.store = store;
     this.list = document.getElementById('commands-list');
-    this.copyButton = document.getElementById('copy-button');
-    this.changesOnlyToggle = document.getElementById('changes-only');
-    this.pasteBox = document.getElementById('paste-box');
-    this.pasteButton = document.getElementById('paste-button');
+    this.loadBox = document.getElementById('load-box');
+    this.loadButton = document.getElementById('load-button');
     this.pasteInput = document.getElementById('paste-input');
     this.pasteMessage = document.getElementById('paste-message');
+    this.resetButton = document.getElementById('reset-button');
     this.resetLabel = document.getElementById('reset-label');
+    this.configHelp = new ConfigHelp();
     this.stateBeforeReset = null;
     this.undoTimer = 0;
 
-    this.changesOnlyToggle.addEventListener('click', () => store.setChangesOnly(!store.changesOnly));
-    this.copyButton.addEventListener('click', () => this.copyCommands());
+    document.getElementById('copy-button').addEventListener('click', () => this.copyCommands());
     document.getElementById('share-button').addEventListener('click', () => this.copyShareLink());
-    this.pasteButton.addEventListener('click', () => this.togglePasteBox());
+    this.loadButton.addEventListener('click', () => this.toggleLoadBox());
+    document.getElementById('request-button').addEventListener('click', () => this.copyRequest());
+    document.getElementById('where-button').addEventListener('click', () => this.configHelp.open());
     document.getElementById('paste-load').addEventListener('click', () => this.loadPastedConfig());
-    document.getElementById('reset-button').addEventListener('click', () => this.resetOrUndo());
+    this.resetButton.addEventListener('click', () => this.resetOrUndo());
 
     this.setupFileDrop();
 
@@ -60,20 +54,19 @@ export class CommandsPanel {
   update() {
     const lines = this.store.commandLines();
     this.list.textContent = '';
-    if (!lines.length) {
-      const empty = document.createElement('span');
-      empty.className = 'empty';
-      empty.textContent = 'No changes';
-      this.list.appendChild(empty);
-    }
     lines.forEach((line, index) => {
       const element = document.createElement('span');
       if (!line.changed) element.className = 'unchanged';
       element.textContent = `${line.name} ${line.value}` + (index < lines.length - 1 ? '\n' : '');
       this.list.appendChild(element);
     });
-    this.copyButton.disabled = !lines.length;
-    this.changesOnlyToggle.setAttribute('aria-checked', String(this.store.changesOnly));
+    if (!this.stateBeforeReset) this.showResetTarget();
+  }
+
+  showResetTarget() {
+    const { label, tip } = RESET_LABELS[this.store.resetTarget()];
+    this.resetLabel.textContent = label;
+    this.resetButton.dataset.tip = tip;
   }
 
   async copyCommands() {
@@ -99,29 +92,51 @@ export class CommandsPanel {
     const copied = await copyText(url);
     if (!copied) {
       // Show the link in the paste box so it can be copied by hand.
-      this.pasteBox.hidden = false;
+      this.openLoadBox();
       this.pasteInput.value = url;
       this.pasteInput.select();
     }
     flashLabel(document.getElementById('share-label'), copied ? 'Link copied' : 'Copy the link below', 'Share link', 1800);
   }
 
-  togglePasteBox() {
-    const open = this.pasteBox.hidden;
-    this.pasteBox.hidden = !open;
-    this.pasteButton.setAttribute('aria-expanded', String(open));
-    if (open) this.pasteInput.focus();
+  async copyRequest() {
+    const request = ConfigStore.requestText();
+    const copied = await copyText(request);
+    if (!copied) {
+      // Show the request in the paste box so it can be copied by hand.
+      this.pasteInput.value = request;
+      this.pasteInput.select();
+    }
+    flashLabel(document.getElementById('request-label'), copied ? 'Copied' : 'Copy the text below', 'Copy request');
+  }
+
+  openLoadBox() {
+    this.loadBox.hidden = false;
+    this.loadButton.setAttribute('aria-expanded', 'true');
+  }
+
+  toggleLoadBox() {
+    const open = this.loadBox.hidden;
+    this.loadBox.hidden = !open;
+    this.loadButton.setAttribute('aria-expanded', String(open));
   }
 
   loadPastedConfig() {
     this.loadConfig(this.pasteInput.value, 'your paste');
   }
 
+  /** Loads a pasted text or a dropped file. source names it in the message. */
   loadConfig(text, source) {
-    const count = this.store.loadConfigText(text);
-    this.pasteMessage.textContent = count
-      ? `Loaded ${count} value${count === 1 ? '' : 's'} from ${source}. Anything not in it uses the DDNet default.`
-      : `No cl_dyncam_* or cl_mouse_* values found in ${source}.`;
+    const { source: format, found, expected } = this.store.loadConfigText(text);
+    if (!found) {
+      this.pasteMessage.textContent = 'No camera settings found.';
+    } else if (format === 'console' && found < expected) {
+      this.pasteMessage.textContent = `Loaded ${found} of ${expected} values. Select all the lines next time.`;
+    } else if (format === 'console') {
+      this.pasteMessage.textContent = `Loaded ${plural(found, 'value')} from the game.`;
+    } else {
+      this.pasteMessage.textContent = `Loaded ${plural(found, 'value')} from ${source}. Anything not in it uses the DDNet default.`;
+    }
   }
 
   /** A .cfg file dropped anywhere on the page is loaded like a paste. */
@@ -149,8 +164,7 @@ export class CommandsPanel {
       overlay.hidden = true;
 
       const file = event.dataTransfer.files[0];
-      this.pasteBox.hidden = false;
-      this.pasteButton.setAttribute('aria-expanded', 'true');
+      this.openLoadBox();
       if (!file || !file.name.toLowerCase().endsWith('.cfg')) {
         this.pasteMessage.textContent = 'Drop a .cfg file, like settings_ddnet.cfg.';
         return;
@@ -163,17 +177,18 @@ export class CommandsPanel {
   resetOrUndo() {
     clearTimeout(this.undoTimer);
     if (this.stateBeforeReset) {
-      this.store.setState(this.stateBeforeReset);
+      const state = this.stateBeforeReset;
       this.stateBeforeReset = null;
-      this.resetLabel.textContent = 'Reset all';
+      this.store.setState(state);
       return;
     }
     this.stateBeforeReset = this.store.getState();
-    this.store.resetToDefaults();
+    this.store.reset();
     this.resetLabel.textContent = 'Undo reset';
+    this.resetButton.dataset.tip = 'Back to the values before the reset.';
     this.undoTimer = setTimeout(() => {
       this.stateBeforeReset = null;
-      this.resetLabel.textContent = 'Reset all';
+      this.showResetTarget();
     }, UNDO_RESET_MS);
   }
 }

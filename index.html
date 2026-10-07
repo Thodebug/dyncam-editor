@@ -16,7 +16,7 @@
         Dyncam editor
         <button class="info-button icon" type="button" aria-label="About the dynamic camera"
           data-tip="**cl_dyncam 1**: camera follows the cursor.&#10;**cl_dyncam 0**: camera stays on your tee.">&#xF05A;</button>
-        <span class="version">v0.14</span>
+        <span class="version">v0.15</span>
       </div>
       <div class="tab-group">
         <button class="tab tab-checkbox" id="dyncam-toggle" type="button" role="switch" aria-checked="true"
@@ -79,21 +79,26 @@
             Commands
             <button class="info-button icon" type="button" aria-label="How to apply"
               data-tip="**DDNet commands**&#10;To apply: in game, F1, Ctrl+V, Enter.">&#xF05A;</button>
-            <button class="checkbox-button" id="changes-only" type="button" role="switch" aria-checked="true"
-              data-tip="Only values that differ from the defaults.">
-              <span class="checkbox"><span class="icon">&#xF00D;</span></span>Changes only
-            </button>
           </h2>
           <pre class="commands-list" id="commands-list"></pre>
           <div class="button-grid">
             <button class="button" id="copy-button" type="button"><span class="icon">&#xF0C5;</span><span id="copy-label">Copy</span></button>
             <button class="button" id="share-button" type="button" data-tip="Copy a link with these values."><span class="icon">&#xF0C1;</span><span id="share-label">Share link</span></button>
-            <button class="button" id="paste-button" type="button" aria-expanded="false"
-              data-tip="Paste or drop settings_ddnet.cfg."><span class="icon">&#xF0EA;</span>Paste config</button>
-            <button class="button" id="reset-button" type="button" data-tip="Back to the DDNet defaults."><span class="icon">&#xF0E2;</span><span id="reset-label">Reset all</span></button>
+            <button class="button wide-button" id="reset-button" type="button" data-tip="Back to the DDNet defaults."><span class="icon">&#xF0E2;</span><span id="reset-label">Reset all</span></button>
+            <button class="button wide-button" id="load-button" type="button" aria-expanded="false" aria-controls="load-box"
+              data-tip="Read your settings from the game."><span class="icon">&#xF0EA;</span>Load from game</button>
           </div>
-          <div id="paste-box" hidden>
-            <textarea id="paste-input" spellcheck="false" placeholder="Paste settings_ddnet.cfg or console lines, e.g. cl_dyncam_deadzone 300. You can also drop the file on the page."></textarea>
+          <div class="load-box" id="load-box" hidden>
+            <div class="load-title">From the console</div>
+            <ol class="load-steps">
+              <li><button class="button small-button" id="request-button" type="button"><span class="icon">&#xF0C5;</span><span id="request-label">Copy request</span></button></li>
+              <li>In game: F1, Ctrl+V, Enter.</li>
+              <li>Select the result with the mouse, Ctrl+C.</li>
+              <li>Paste it below.</li>
+            </ol>
+            <div class="load-title">Or from settings_ddnet.cfg <button class="link-button" id="where-button" type="button">Where is it?</button></div>
+            <textarea id="paste-input" spellcheck="false" aria-label="Console result or settings_ddnet.cfg"
+              placeholder="Paste here, or drop settings_ddnet.cfg on the page."></textarea>
             <div class="button-grid single"><button class="button" id="paste-load" type="button">Load</button></div>
             <div class="paste-message" id="paste-message" role="status"></div>
           </div>
@@ -128,6 +133,32 @@
   <div class="tooltip" id="tooltip" role="tooltip"></div>
 
   <div class="drop-overlay" id="drop-overlay" hidden>Drop settings_ddnet.cfg to load your camera settings</div>
+
+  <div class="popup" id="where-popup" hidden>
+    <div class="popup-frame where-frame" role="dialog" aria-modal="true" aria-labelledby="where-title">
+      <div class="popup-content">
+        <div class="popup-title" id="where-title">Where is settings_ddnet.cfg?</div>
+        <img class="where-image" src="assets/help/settings-file.webp" width="1280" height="691" loading="lazy"
+          alt="DDNet settings, General page: the Settings file button at the bottom left">
+        <div class="popup-message">In game: <b>Settings → General → Settings file</b>. It opens in your text editor: Ctrl+A, Ctrl+C, then paste it here.</div>
+        <div class="popup-message">Or open its folder:</div>
+        <div class="os-tabs" role="tablist" aria-label="Operating system">
+          <button class="os-tab" type="button" role="tab" data-os="windows">Windows</button>
+          <button class="os-tab" type="button" role="tab" data-os="linux">Linux</button>
+          <button class="os-tab" type="button" role="tab" data-os="macos">macOS</button>
+        </div>
+        <div class="os-panel" role="tabpanel">
+          <div class="os-path"><code id="os-path"></code><button class="button small-button" id="os-path-copy" type="button"><span class="icon">&#xF0C5;</span><span id="os-path-label">Copy</span></button></div>
+          <div class="popup-message" id="os-tip"></div>
+        </div>
+        <ul class="popup-notes">
+          <li>Steam: “Browse local files” opens the game folder, not this one.</li>
+          <li>Portable install: the file is in the game folder.</li>
+        </ul>
+        <div class="button-grid single"><button class="button" id="where-close" type="button">Close</button></div>
+      </div>
+    </div>
+  </div>
 
   <div class="popup" id="snapshot-popup" hidden>
     <div class="popup-frame">

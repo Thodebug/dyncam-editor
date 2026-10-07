@@ -132,12 +132,14 @@ export const SETTINGS_BY_NAME = Object.fromEntries(SETTINGS.map((setting) => [se
 /** Camera settings, in the order used by share links. */
 export const CAMERA_SETTINGS = SETTINGS.filter((setting) => setting.group !== 'preview');
 
-/** Lines written in the commands list, in this order. */
-export const COMMAND_NAMES = [
-  'cl_dyncam',
-  ...SETTINGS.filter((setting) => setting.group === 'mouse').map((setting) => setting.name),
-  ...SETTINGS.filter((setting) => setting.group === 'dyncam').map((setting) => setting.name),
-];
+/** Lines written in the commands list: cl_dyncam and the settings of the camera mode shown. */
+export function commandNames(dyncam) {
+  const group = dyncam ? 'dyncam' : 'mouse';
+  return ['cl_dyncam', ...SETTINGS.filter((setting) => setting.group === group).map((setting) => setting.name)];
+}
+
+/** Values read from the game with the console request: cl_dyncam and every setting. */
+export const REQUEST_NAMES = ['cl_dyncam', ...SETTINGS.map((setting) => setting.name)];
 
 /** DDNet default of cl_dyncam. */
 export const DEFAULT_DYNCAM = 0;

@@ -340,13 +340,17 @@ textarea {
 
 .button-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: calc(5 * var(--u));
   margin-top: calc(5 * var(--u));
 }
 
 .button-grid.single {
   grid-template-columns: 1fr;
+}
+
+.wide-button {
+  grid-column: 1 / -1;
 }
 
 .button {
@@ -615,13 +619,6 @@ h2 .info-button {
   font-size: calc(12 * var(--u));
 }
 
-h2 .checkbox-button {
-  margin-left: auto;
-  gap: calc(6 * var(--u));
-  font-size: calc(11 * var(--u));
-  white-space: nowrap;
-}
-
 .section {
   margin-bottom: calc(12 * var(--u));
 }
@@ -706,9 +703,55 @@ h2 .checkbox-button {
   opacity: 0.5;
 }
 
-.commands-list .empty {
-  opacity: 0.5;
-  font-style: italic;
+.load-box {
+  margin-top: calc(5 * var(--u));
+  padding: calc(6 * var(--u)) calc(8 * var(--u));
+  border-radius: calc(5 * var(--u));
+  background: var(--list);
+  font-size: calc(11 * var(--u));
+}
+
+.load-title {
+  font-size: calc(12 * var(--u));
+  line-height: 1.5;
+}
+
+.load-title .link-button {
+  margin-left: calc(4 * var(--u));
+  font-size: calc(11 * var(--u));
+}
+
+.load-steps {
+  margin: calc(2 * var(--u)) 0 calc(8 * var(--u));
+  padding-left: calc(18 * var(--u));
+  line-height: 1.6;
+}
+
+.small-button {
+  display: inline-flex;
+  height: calc(17 * var(--u));
+  padding: 0 calc(8 * var(--u));
+  font-size: calc(11 * var(--u));
+  vertical-align: middle;
+}
+
+.small-button .icon {
+  font-size: calc(9.5 * var(--u));
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  opacity: 1;
 }
 
 .paste-message {
@@ -993,6 +1036,88 @@ input[type="range"]:active::-webkit-slider-thumb {
 
 .popup-message {
   font-size: calc(11 * var(--u));
+}
+
+.popup-title {
+  font-size: calc(16 * var(--u));
+}
+
+/* ---------- Where is settings_ddnet.cfg? ---------- */
+
+.where-frame {
+  width: min(calc(480 * var(--u)), 100%);
+  max-height: 100%;
+  overflow-y: auto;
+}
+
+.popup-content .where-image {
+  width: 100%;
+  height: auto;
+  max-height: none;
+}
+
+.os-tabs {
+  display: flex;
+  gap: calc(2 * var(--u));
+}
+
+.os-tab {
+  flex: 1;
+  height: calc(20 * var(--u));
+  border: 0;
+  background: var(--tab);
+  font-size: calc(12 * var(--u));
+  cursor: pointer;
+}
+
+.os-tab:first-child {
+  border-top-left-radius: calc(5 * var(--u));
+}
+
+.os-tab:last-child {
+  border-top-right-radius: calc(5 * var(--u));
+}
+
+.os-tab:hover {
+  background: var(--tab-hover);
+}
+
+.os-tab[aria-selected="true"] {
+  background: var(--page);
+}
+
+.os-panel {
+  display: flex;
+  flex-direction: column;
+  gap: calc(5 * var(--u));
+  margin-top: calc(-6 * var(--u));
+  padding: calc(8 * var(--u));
+  border-radius: 0 0 calc(5 * var(--u)) calc(5 * var(--u));
+  background: var(--page);
+}
+
+.os-path {
+  display: flex;
+  align-items: center;
+  gap: calc(6 * var(--u));
+}
+
+.os-path code {
+  flex: 1;
+  padding: calc(3 * var(--u)) calc(6 * var(--u));
+  border-radius: calc(3 * var(--u));
+  background: var(--list);
+  font-family: var(--font);
+  font-size: calc(11 * var(--u));
+  user-select: all;
+  overflow-wrap: anywhere;
+}
+
+.popup-notes {
+  margin: 0;
+  padding-left: calc(16 * var(--u));
+  font-size: calc(10 * var(--u));
+  opacity: 0.85;
 }
 
 /* ---------- Narrow windows ---------- */

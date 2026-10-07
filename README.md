@@ -25,8 +25,11 @@ This editor shows what each value does, on the ctf5 map, exactly as the game dra
   Left click fires, right click hooks, the mouse wheel switches between laser and hammer.
 - Tooltips with the live limit formula and the values that have no effect, and warnings for settings that lock
   the camera or the cursor.
-- Commands ready to paste in the game console, with an option to list only the changed values.
-- Share link, paste or drop of `settings_ddnet.cfg`, reset with undo, image of the view for Discord.
+- Commands ready to paste in the game console: `cl_dyncam` and the settings of the camera mode shown.
+  Values changed since the start are highlighted.
+- Load from game: a console request prints your values in game, paste the result back here.
+  `settings_ddnet.cfg` can also be pasted or dropped, with help to find it.
+- Share link, reset to your loaded values or to the defaults with undo, image of the view for Discord.
 - The last config is kept in the browser.
 
 ## Apply the commands in game
@@ -66,7 +69,9 @@ js/
   game-view.js          game view: draw order, camera, distance circles
   pointer.js            aiming, mouse capture, buttons and wheel
   settings-panel.js     setting rows and their notes
-  commands-panel.js     commands list, copy, share, paste, reset
+  commands-panel.js     commands list, copy, share, load from game, reset
+  config-help.js        "Where is settings_ddnet.cfg?" popup
+  clipboard.js          copy to the clipboard
   snapshot.js           image of the view with the commands
   tooltip.js            tooltips
 assets/
@@ -74,6 +79,7 @@ assets/
   mapres/               images used by ctf5 (data/mapres of DDNet)
   sprites/              tee skin, weapons, particles, menu background fade
   fonts/                DejaVu Sans and icons
+  help/                 capture of the DDNet settings menu
 ```
 
 The formulas follow the DDNet source code. Comments in the code name the DDNet function each part comes from.

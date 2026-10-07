@@ -151,9 +151,10 @@ async function start() {
   });
   dyncamToggle.addEventListener('click', () => store.setDyncam(!store.dyncam));
 
-  // A share link in the address wins over the last config saved in the browser.
+  // The last state saved in the browser keeps the user's baseline; the values of a share link replace its values.
   const loadLinkedConfig = () => store.loadShareToken(location.hash.replace(/^#/, ''));
-  if (!loadLinkedConfig()) store.restore();
+  store.restore();
+  loadLinkedConfig();
   addEventListener('hashchange', loadLinkedConfig);
   addEventListener('pagehide', () => store.save());
   store.notify();
