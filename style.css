@@ -768,6 +768,16 @@ h2 .info-button {
   background: var(--row);
 }
 
+.setting.is-highlighted {
+  animation: setting-highlight 1.5s ease-out;
+}
+
+@keyframes setting-highlight {
+  from {
+    background: rgba(255, 255, 255, 0.45);
+  }
+}
+
 .setting-header {
   display: flex;
   align-items: center;

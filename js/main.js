@@ -129,7 +129,7 @@ async function start() {
       gameView.requestRender();
     },
   });
-  const commandsPanel = new CommandsPanel({ store });
+  const commandsPanel = new CommandsPanel({ store, onLoaded: (names) => settingsPanel.highlight(names) });
 
   const dyncamToggle = byId('dyncam-toggle');
   const stage = byId('stage');

@@ -23,8 +23,10 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 /** The Commands section: command list, Copy, Share link, Load from game and Reset all. */
 export class CommandsPanel {
-  constructor({ store }) {
+  /** onLoaded(names) is called after a load with the names of the settings it changed. */
+  constructor({ store, onLoaded }) {
     this.store = store;
+    this.onLoaded = onLoaded;
     this.list = document.getElementById('commands-list');
     this.loadBox = document.getElementById('load-box');
     this.loadButton = document.getElementById('load-button');
@@ -121,29 +123,46 @@ export class CommandsPanel {
     this.loadButton.setAttribute('aria-expanded', 'true');
   }
 
+  closeLoadBox() {
+    this.loadBox.hidden = true;
+    this.loadButton.setAttribute('aria-expanded', 'false');
+  }
+
   toggleLoadBox() {
-    const open = this.loadBox.hidden;
-    this.loadBox.hidden = !open;
-    this.loadButton.setAttribute('aria-expanded', String(open));
+    if (this.loadBox.hidden) this.openLoadBox();
+    else this.closeLoadBox();
   }
 
   loadPastedConfig() {
-    this.loadConfig(this.pasteInput.value, 'your paste');
+    this.loadConfig(this.pasteInput.value);
   }
 
-  /** Loads a pasted text or a dropped file. source names it in the message. */
-  loadConfig(text, source) {
+  /**
+   * Loads a pasted text or a dropped file.
+   * A complete load closes the box and shows the count on the Load from game button;
+   * otherwise the message in the box says what is missing.
+   */
+  loadConfig(text) {
+    const before = { ...this.store.values };
     const { source: format, found, expected } = this.store.loadConfigText(text);
+    const changed = Object.keys(before).filter((name) => this.store.values[name] !== before[name]);
+    if (changed.length) this.onLoaded(changed);
+
+    const complete = found > 0 && (format !== 'console' || found === expected);
+    if (complete) {
+      this.closeLoadBox();
+      this.pasteInput.value = '';
+      this.pasteMessage.textContent = '';
+      flashLabel(document.getElementById('load-label'), `Loaded ${plural(found, 'value')}`, 'Load from game', 2000);
+      return;
+    }
+
     if (format === 'console' && !found) {
       this.pasteMessage.textContent = `Select all ${expected} lines of the result, then paste them again.`;
     } else if (!found) {
       this.pasteMessage.textContent = 'No camera settings found.';
     } else if (format === 'console' && found < expected) {
       this.pasteMessage.textContent = `Loaded ${found} of ${expected} values. Select all the lines next time.`;
-    } else if (format === 'console') {
-      this.pasteMessage.textContent = `Loaded ${plural(found, 'value')} from the game.`;
-    } else {
-      this.pasteMessage.textContent = `Loaded ${plural(found, 'value')} from ${source}. Anything not in it uses the DDNet default.`;
     }
   }
 
@@ -177,7 +196,7 @@ export class CommandsPanel {
         this.pasteMessage.textContent = 'Drop a .cfg file, like settings_ddnet.cfg.';
         return;
       }
-      this.loadConfig(await file.text(), file.name);
+      this.loadConfig(await file.text());
     });
   }
 

@@ -158,7 +158,20 @@ export class SettingsPanel {
     row.addEventListener('focusin', () => onFocus(setting.name));
     row.addEventListener('focusout', () => onFocus(null));
 
-    return { setting, numberInput, slider, message };
+    row.addEventListener('animationend', () => row.classList.remove('is-highlighted'));
+
+    return { setting, row, numberInput, slider, message };
+  }
+
+  /** Lights up the rows of these settings for a moment, to show the values a load changed. */
+  highlight(names) {
+    for (const { setting, row } of this.rows) {
+      if (!names.includes(setting.name)) continue;
+      row.classList.remove('is-highlighted');
+      // Reading the layout restarts the animation when the row is already lit.
+      void row.offsetWidth;
+      row.classList.add('is-highlighted');
+    }
   }
 
   /** Shows the store's values, messages and active camera mode. */
