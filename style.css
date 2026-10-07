@@ -250,6 +250,12 @@ textarea {
   font-size: calc(11 * var(--u));
 }
 
+.github-mark {
+  width: calc(13 * var(--u));
+  height: calc(13 * var(--u));
+  fill: currentColor;
+}
+
 .tab-menu .tab-caret {
   font-size: calc(9 * var(--u));
   opacity: 0.65;

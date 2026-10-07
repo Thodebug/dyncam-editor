@@ -33,6 +33,7 @@ Licensed under the [zlib license](https://github.com/ddnet/ddnet/blob/master/lic
 | `assets/sprites/blob.png`                                 | `data/blob.png` of DDNet, resized to 128×128                                                         | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
 | `assets/help/settings-file.webp`                          | Capture of the DDNet settings menu, with marks added                                                 | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
 | `assets/sprites/skin-default.png`                         | `data/skins/default.png` of DDNet, Copyright Magnus Auvinen                                          | zlib                                                            |
+| GitHub logo in `index.html`                               | `mark-github` of [Octicons](https://github.com/primer/octicons), Copyright (c) GitHub Inc.           | [MIT](https://github.com/primer/octicons/blob/main/LICENSE)     |
 
 ## Fonts
 
