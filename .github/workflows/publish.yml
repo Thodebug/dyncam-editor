@@ -55,7 +55,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version=$(grep -o '<span class="version">v[0-9.]*</span>' index.html | grep -o 'v[0-9.]*')
+          version=$(sed -n 's|.*<span class="version">\(v[0-9.]*\)</span>.*|\1|p' index.html)
+          if [ -z "$version" ]; then
+            echo "::error::No version found in index.html"
+            exit 1
+          fi
           if git rev-parse --verify --quiet "refs/tags/$version" > /dev/null; then
             echo "$version is already released"
             exit 0
