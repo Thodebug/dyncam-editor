@@ -49,6 +49,18 @@ python -m http.server 8000
 
 Then open http://localhost:8000. There is no build step: the files of the repository are the site.
 
+## Code checks
+
+The site needs no install. To check the code with [ESLint](https://eslint.org) and [Prettier](https://prettier.io)
+(Node.js 18 or later):
+
+```sh
+npm install
+npm run check
+```
+
+`npm run format` formats the files.
+
 ## Project structure
 
 ```
@@ -84,6 +96,8 @@ assets/
   sprites/              tee skin, weapons, particles, menu background fade
   fonts/                DejaVu Sans and icons
   help/                 capture of the DDNet settings menu
+eslint.config.js        code checks (development only)
+.prettierrc.json        code format (development only)
 ```
 
 The formulas follow the DDNet source code. Comments in the code name the DDNet function each part comes from.

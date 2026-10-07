@@ -157,7 +157,6 @@ export class MapRenderer {
 
   /** Clips to a group's clip rectangle. Returns false when the rectangle is off screen and the group is not drawn. */
   clipGroup(clip, center, aspect, zoom) {
-    const f = Math.fround;
     const screen = mapScreenToWorld(center.x, center.y, 100, 100, 100, 0, 0, aspect, zoom);
     const screenWidth = f(screen.right - screen.left);
     const screenHeight = f(screen.bottom - screen.top);

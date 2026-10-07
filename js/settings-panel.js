@@ -5,9 +5,9 @@ import { coloredValue, fraction, tipMarkup } from './tooltip.js';
 /** Half the width of a slider knob, in UI units: the knob center can't get closer to the rail ends. */
 const KNOB_HALF_WIDTH = 16.5;
 
-/** CSS position of a value on a slider rail, matching the knob center. */
-function railPosition(fraction) {
-  return `calc(${KNOB_HALF_WIDTH} * var(--u) + (100% - ${2 * KNOB_HALF_WIDTH} * var(--u)) * ${fraction.toFixed(4)})`;
+/** CSS position on a slider rail of a share (0 to 1) of its range, matching the knob center. */
+function railPosition(share) {
+  return `calc(${KNOB_HALF_WIDTH} * var(--u) + (100% - ${2 * KNOB_HALF_WIDTH} * var(--u)) * ${share.toFixed(4)})`;
 }
 
 function sliderMaximum(setting) {
@@ -193,8 +193,11 @@ export class SettingsPanel {
       if (inactive === undefined || inactive >= top) {
         slider.style.removeProperty('--track');
       } else {
-        const fraction = Math.max(0, (inactive - setting.min) / (top - setting.min));
-        slider.style.setProperty('--track', `linear-gradient(to right, var(--rail) ${railPosition(fraction)}, var(--rail-inactive) 0)`);
+        const inactiveShare = Math.max(0, (inactive - setting.min) / (top - setting.min));
+        slider.style.setProperty(
+          '--track',
+          `linear-gradient(to right, var(--rail) ${railPosition(inactiveShare)}, var(--rail-inactive) 0)`,
+        );
       }
     }
 
