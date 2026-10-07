@@ -66,4 +66,7 @@ jobs:
           else
             notes=$(git log -1 --format=%B)
           fi
-          gh release create "$version" --target "$GITHUB_SHA" --title "$version" --notes "$notes"
+          if ! output=$(gh release create "$version" --target "$GITHUB_SHA" --title "$version" --notes "$notes" 2>&1); then
+            echo "::error::Release $version not created: $output"
+            exit 1
+          fi
