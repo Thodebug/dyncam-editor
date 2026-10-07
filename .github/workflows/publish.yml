@@ -1,0 +1,69 @@
+# For each push to main, after the checks pass:
+# - publishes the site on GitHub Pages (only the files of the site, not the development files);
+# - when the version shown in index.html has no release yet, creates its tag and GitHub Release,
+#   with the commits since the previous version as notes (the last commit's message for the first release).
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+
+  deploy:
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    # One deployment at a time
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Gather the site files
+        run: |
+          mkdir _site
+          cp -r index.html style.css js assets LICENSE CREDITS.md _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  release:
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Create the release of a new version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(grep -o '<span class="version">v[0-9.]*</span>' index.html | grep -o 'v[0-9.]*')
+          if git rev-parse --verify --quiet "refs/tags/$version" > /dev/null; then
+            echo "$version is already released"
+            exit 0
+          fi
+          previous=$(git describe --tags --abbrev=0 2> /dev/null || true)
+          if [ -n "$previous" ]; then
+            notes=$(git log --format='- %s' "$previous..HEAD")
+          else
+            notes=$(git log -1 --format=%B)
+          fi
+          gh release create "$version" --target "$GITHUB_SHA" --title "$version" --notes "$notes"

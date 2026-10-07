@@ -64,7 +64,7 @@ npm run check
 `npm run format` formats the files.
 
 GitHub Actions runs the same checks on every push (`.github/workflows/checks.yml`). The site is published on GitHub Pages
-only when they pass (`deploy.yml`), and each version tag gets a GitHub Release (`release.yml`).
+only when they pass, and each new version shown in `index.html` gets its tag and GitHub Release (`publish.yml`).
 
 ## Project structure
 
