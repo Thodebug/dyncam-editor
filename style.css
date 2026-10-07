@@ -782,6 +782,12 @@ h2 .info-button {
   font-size: calc(9.5 * var(--u));
 }
 
+.link-message {
+  margin-top: calc(6 * var(--u));
+  font-size: calc(10 * var(--u));
+  color: var(--warning);
+}
+
 .paste-message {
   min-height: 1.2em;
   margin-top: calc(4 * var(--u));

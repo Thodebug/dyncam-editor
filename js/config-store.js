@@ -11,6 +11,10 @@ import {
 import { DEFAULT_MAP, isMapId } from './maps.js';
 
 const STORAGE_KEY = 'dyncam-editor';
+/** Commands written in share links. */
+const LINK_COMMANDS = ['cl_dyncam', ...CAMERA_SETTINGS.map((setting) => setting.name)];
+/** Longest name or value quoted in the message of a link that cannot be read. */
+const MAX_QUOTED_LENGTH = 40;
 const SAVE_DELAY_MS = 300;
 
 /**
@@ -50,7 +54,7 @@ export class ConfigStore {
     this.notify();
   }
 
-  /** Entities view (cl_overlay_entities 100). Kept in the browser, not in share links. */
+  /** Entities view (cl_overlay_entities 100). Kept in the browser and in share links. */
   setEntities(enabled) {
     this.entities = enabled;
     this.notify();
@@ -197,28 +201,32 @@ export class ConfigStore {
   /* ---------- Share link ---------- */
 
   /**
-   * Link fragment: "s" + cl_dyncam + the camera settings + the map, separated by dots.
-   * Only letters, digits and dots are used so the fragment survives every host.
-   * Links made before maps were added have no map: the map shown does not change.
+   * Link fragment: every camera command as "name=value", then the map and the entities view, joined with "&":
+   * "cl_dyncam=1&cl_dyncam_max_distance=1000&…&cl_mouse_followfactor=0&map=ctf5&entities=0".
    */
-  shareToken() {
-    const numbers = [this.dyncam ? 1 : 0, ...CAMERA_SETTINGS.map((setting) => this.values[setting.name])];
-    return 's' + numbers.join('.') + '.' + this.mapId;
+  shareFragment() {
+    const params = new URLSearchParams();
+    for (const name of LINK_COMMANDS) params.set(name, this.commandValue(name));
+    params.set('map', this.mapId);
+    params.set('entities', this.entities ? 1 : 0);
+    return params.toString();
   }
 
-  /** Applies a share token. Returns false if the token is not valid. */
-  loadShareToken(token) {
-    const match = token.match(/^s(\d+(?:\.\d+)*)(?:\.([a-z][a-z0-9]*))?$/);
-    if (!match) return false;
-    const [dyncam, ...numbers] = match[1].split('.').map(Number);
-    if (numbers.length !== CAMERA_SETTINGS.length) return false;
-    if (isMapId(match[2])) this.mapId = match[2];
-
-    const values = Object.fromEntries(CAMERA_SETTINGS.map((setting, index) => [setting.name, numbers[index]]));
-    this.replaceValues({ ...values, inp_mousesens: this.values.inp_mousesens });
-    this.dyncam = dyncam !== 0;
+  /**
+   * Applies a link fragment made by shareFragment(). Every camera command first gets its DDNet default,
+   * then the value of the link. Values out of range are clamped, like the game does.
+   * The map and the entities view work the same way. inp_mousesens and the baseline do not change.
+   * Returns null once the link is applied, or the reason it cannot be read: nothing changes then.
+   */
+  loadShareFragment(fragment) {
+    const link = readShareFragment(fragment);
+    if (link.error) return link.error;
+    this.replaceValues({ ...link.values, inp_mousesens: this.values.inp_mousesens });
+    this.dyncam = (link.values.cl_dyncam ?? DEFAULT_DYNCAM) >= 1;
+    this.mapId = link.map ?? DEFAULT_MAP;
+    this.entities = link.entities ?? false;
     this.notify();
-    return true;
+    return null;
   }
 
   /* ---------- Browser storage ---------- */
@@ -330,4 +338,35 @@ function readCommands(text) {
     if (isKnownName(name)) found[name] = Number(value);
   }
   return found;
+}
+
+/** Text of a link, quoted in a message. */
+function quote(text) {
+  const short = text.length > MAX_QUOTED_LENGTH ? text.slice(0, MAX_QUOTED_LENGTH) + '…' : text;
+  return `"${short}"`;
+}
+
+/**
+ * Reads a link fragment "name=value&…".
+ * Returns { values, map, entities } with only what the link has, or { error } with the first problem found.
+ */
+function readShareFragment(fragment) {
+  const values = {};
+  let map;
+  let entities;
+  let count = 0;
+  for (const [name, text] of new URLSearchParams(fragment)) {
+    count++;
+    if (name === 'map') {
+      if (!isMapId(text)) return { error: `unknown map ${quote(text)}` };
+      map = text;
+      continue;
+    }
+    if (name !== 'entities' && !LINK_COMMANDS.includes(name)) return { error: `unknown command ${quote(name)}` };
+    if (!/^-?\d+$/.test(text)) return { error: `${name} needs a whole number, not ${quote(text)}` };
+    if (name === 'entities') entities = Number(text) >= 1;
+    else values[name] = Number(text);
+  }
+  if (!count) return { error: 'it has no values' };
+  return { values, map, entities };
 }

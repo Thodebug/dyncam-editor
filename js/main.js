@@ -180,12 +180,15 @@ async function start() {
   dyncamToggle.addEventListener('click', () => store.setDyncam(!store.dyncam));
   entitiesToggle.addEventListener('click', () => store.setEntities(!store.entities));
 
-  // The last state saved in the browser keeps the user's baseline; the values of a share link replace its values.
-  // Once applied, the link is removed from the address, so a reload keeps the changes made since.
+  // The last state saved in the browser keeps the user's baseline; a share link replaces the values,
+  // the map and the entities view. Once applied, the link is removed from the address,
+  // so a reload keeps the changes made since. A link that cannot be read stays in the address.
   const loadLinkedConfig = () => {
-    if (store.loadShareToken(location.hash.replace(/^#/, ''))) {
-      history.replaceState(null, '', location.pathname + location.search);
-    }
+    const fragment = location.hash.replace(/^#/, '');
+    if (!fragment) return;
+    const error = store.loadShareFragment(fragment);
+    commandsPanel.showLinkError(error);
+    if (!error) history.replaceState(null, '', location.pathname + location.search);
   };
   store.restore();
   loadLinkedConfig();

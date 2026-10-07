@@ -3,6 +3,7 @@ import { ConfigHelp } from './config-help.js';
 import { copyText, flashLabel } from './clipboard.js';
 
 const UNDO_RESET_MS = 5000;
+const LINK_MESSAGE_MS = 10000;
 /** Largest text read as a config. settings_ddnet.cfg is about 50 KB; a larger text is not a config. */
 const MAX_CONFIG_SIZE = 1024 * 1024;
 const COPY_ICON = '\uF0C5';
@@ -34,6 +35,8 @@ export class CommandsPanel {
     this.loadButton = document.getElementById('load-button');
     this.pasteInput = document.getElementById('paste-input');
     this.pasteMessage = document.getElementById('paste-message');
+    this.linkMessage = document.getElementById('link-message');
+    this.linkMessageTimer = 0;
     this.resetButton = document.getElementById('reset-button');
     this.resetLabel = document.getElementById('reset-label');
     this.configHelp = new ConfigHelp();
@@ -95,7 +98,7 @@ export class CommandsPanel {
   }
 
   async copyShareLink() {
-    const url = `${pageAddress()}#${this.store.shareToken()}`;
+    const url = `${pageAddress()}#${this.store.shareFragment()}`;
     const copied = await copyText(url);
     if (!copied) {
       // Show the link in the paste box so it can be copied by hand.
@@ -109,6 +112,17 @@ export class CommandsPanel {
       'Share link',
       1800,
     );
+  }
+
+  /** Shows for a few seconds why a share link cannot be read. null hides the message. */
+  showLinkError(error) {
+    clearTimeout(this.linkMessageTimer);
+    this.linkMessage.hidden = !error;
+    if (!error) return;
+    this.linkMessage.textContent = `This link cannot be read: ${error}.`;
+    this.linkMessageTimer = setTimeout(() => {
+      this.linkMessage.hidden = true;
+    }, LINK_MESSAGE_MS);
   }
 
   /** Copies the console line that prints the values. If the clipboard is blocked, selects it to copy by hand. */
