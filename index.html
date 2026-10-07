@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -15,7 +15,7 @@
     <header class="tab-bar">
       <div class="tab tab-title">
         Dyncam editor
-        <span class="version">v0.20</span>
+        <span class="version">v0.21</span>
       </div>
       <div class="tab-group">
         <button class="tab tab-checkbox" id="dyncam-toggle" type="button" role="switch" aria-checked="true"
@@ -62,7 +62,7 @@
       <section class="view">
         <div class="view-frame">
           <div class="stage" id="stage">
-            <canvas id="game-canvas" aria-label="Game view: hover to aim"></canvas>
+            <canvas id="game-canvas" role="img" aria-label="Game view: hover to aim"></canvas>
             <button class="snapshot-button" id="snapshot-button" type="button" aria-label="Copy image"
               data-tip="Copy an image for Discord."><span class="icon" id="snapshot-icon">&#xF030;</span></button>
             <div class="readout" id="readout" hidden>
@@ -178,7 +178,7 @@
   <div class="popup" id="snapshot-popup" hidden>
     <div class="popup-frame">
       <div class="popup-content">
-        <img id="snapshot-image" alt="Game view with your commands">
+        <div id="snapshot-image-frame"></div>
         <div class="popup-message">Your browser blocked copying images: right-click the image to copy or save it.</div>
         <div class="button-grid single"><button class="button" id="snapshot-close" type="button">Close</button></div>
       </div>

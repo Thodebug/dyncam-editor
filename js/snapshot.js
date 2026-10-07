@@ -71,7 +71,8 @@ export class SnapshotButton {
     this.button = document.getElementById('snapshot-button');
     this.icon = document.getElementById('snapshot-icon');
     this.popup = document.getElementById('snapshot-popup');
-    this.image = document.getElementById('snapshot-image');
+    this.imageFrame = document.getElementById('snapshot-image-frame');
+    this.imageUrl = '';
 
     this.button.addEventListener('click', () => this.copySnapshot());
     document.getElementById('snapshot-close').addEventListener('click', () => this.closePopup());
@@ -108,13 +109,18 @@ export class SnapshotButton {
   }
 
   openPopup(blob) {
-    this.image.src = URL.createObjectURL(blob);
+    this.imageUrl = URL.createObjectURL(blob);
+    const image = new Image();
+    image.alt = 'Game view with your commands';
+    image.src = this.imageUrl;
+    this.imageFrame.replaceChildren(image);
     this.popup.hidden = false;
     document.getElementById('snapshot-close').focus();
   }
 
   closePopup() {
     this.popup.hidden = true;
-    URL.revokeObjectURL(this.image.src);
+    this.imageFrame.replaceChildren();
+    URL.revokeObjectURL(this.imageUrl);
   }
 }

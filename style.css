@@ -733,6 +733,21 @@ h2 .info-button {
   font-size: calc(11 * var(--u));
 }
 
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  opacity: 1;
+}
+
 .load-title {
   font-size: calc(12 * var(--u));
   line-height: 1.5;
@@ -759,21 +774,6 @@ h2 .info-button {
 
 .small-button .icon {
   font-size: calc(9.5 * var(--u));
-}
-
-.link-button {
-  padding: 0;
-  border: 0;
-  background: none;
-  font-size: inherit;
-  text-decoration: underline;
-  text-underline-offset: 0.2em;
-  opacity: 0.85;
-  cursor: pointer;
-}
-
-.link-button:hover {
-  opacity: 1;
 }
 
 .paste-message {
@@ -839,11 +839,11 @@ h2 .info-button {
   font-size: calc(11 * var(--u));
   text-align: center;
   outline: none;
-  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .number-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
+  appearance: none;
 }
 
 .number-input:hover {
@@ -888,7 +888,6 @@ input[type="range"] {
   height: calc(16 * var(--u));
   margin: 0;
   background: transparent;
-  -webkit-appearance: none;
   appearance: none;
   cursor: pointer;
 }
@@ -912,7 +911,7 @@ input[type="range"]::-webkit-slider-thumb {
   border: 0;
   border-radius: calc(5 * var(--u));
   background: var(--knob);
-  -webkit-appearance: none;
+  appearance: none;
 }
 
 input[type="range"]::-moz-range-thumb {
@@ -952,15 +951,12 @@ input[type="range"]:active::-webkit-slider-thumb {
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.25s;
+  /* Tooltip text keeps its line breaks; formulas, notes and the range line are blocks of their own */
+  white-space: pre-line;
 }
 
 .tooltip.is-visible {
   opacity: 1;
-}
-
-/* Tooltip text keeps its line breaks; formulas, notes and the range line are blocks of their own */
-.tooltip {
-  white-space: pre-line;
 }
 
 .tooltip b {
@@ -988,7 +984,7 @@ input[type="range"]:active::-webkit-slider-thumb {
 
 .tip-fraction > span:first-child {
   padding: 0 0.25em;
-  border-bottom: 1px solid currentColor;
+  border-bottom: 1px solid currentcolor;
 }
 
 .tip-value {
