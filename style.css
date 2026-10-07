@@ -211,10 +211,6 @@ textarea {
   background: var(--page);
 }
 
-.tab-title .info-button {
-  font-size: calc(12 * var(--u));
-}
-
 .version {
   align-self: flex-end;
   margin-bottom: calc(5 * var(--u));
@@ -564,11 +560,14 @@ textarea::placeholder {
   animation: none;
 }
 
+/* Lines are 8 units taller than their place, with the extra above and below hidden by negative margins,
+   so letters going below the line (g, p, y) are not cut by overflow: hidden. */
 .loading-title,
 .loading-detail {
-  height: calc(24 * var(--ui));
+  height: calc(32 * var(--ui));
+  margin-block: calc(-4 * var(--ui));
   overflow: hidden;
-  line-height: calc(24 * var(--ui));
+  line-height: calc(32 * var(--ui));
   text-overflow: ellipsis;
 }
 
@@ -577,7 +576,7 @@ textarea::placeholder {
 }
 
 .loading-detail {
-  margin-top: calc(20 * var(--ui));
+  margin-top: calc(16 * var(--ui));
   font-size: calc(20 * var(--ui));
 }
 
