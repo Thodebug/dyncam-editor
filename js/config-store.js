@@ -2,6 +2,7 @@ import {
   SETTINGS,
   SETTINGS_BY_NAME,
   CAMERA_SETTINGS,
+  PREVIEW_SETTINGS,
   REQUEST_NAMES,
   DEFAULT_DYNCAM,
   commandNames,
@@ -86,7 +87,12 @@ export class ConfigStore {
     }
   }
 
-  /** True when cl_dyncam and every camera setting equal the baseline. inp_mousesens is not compared. */
+  /** Current values of the preview settings (inp_mousesens, cl_default_zoom). */
+  previewValues() {
+    return Object.fromEntries(PREVIEW_SETTINGS.map((setting) => [setting.name, this.values[setting.name]]));
+  }
+
+  /** True when cl_dyncam and every camera setting equal the baseline. Preview settings are not compared. */
   isAtBaseline() {
     if (this.commandValue('cl_dyncam') !== this.baseline.cl_dyncam) return false;
     return CAMERA_SETTINGS.every((setting) => this.values[setting.name] === this.baseline[setting.name]);
@@ -110,15 +116,15 @@ export class ConfigStore {
   }
 
   /**
-   * Reset all. inp_mousesens is the user's own sensitivity and is kept.
+   * Reset all. The preview settings are the user's own and are kept.
    * Back to the loaded values includes their cl_dyncam; back to the defaults keeps the camera mode shown.
    */
   reset() {
     if (this.resetTarget() === 'baseline') {
-      this.replaceValues({ ...this.baseline, inp_mousesens: this.values.inp_mousesens });
+      this.replaceValues({ ...this.baseline, ...this.previewValues() });
       this.dyncam = this.baseline.cl_dyncam >= 1;
     } else {
-      this.replaceValues({ inp_mousesens: this.values.inp_mousesens });
+      this.replaceValues(this.previewValues());
       this.baseline = ConfigStore.defaultBaseline();
     }
     this.notify();
@@ -167,7 +173,7 @@ export class ConfigStore {
    *   Values missing from it are kept, as the selection can miss a few lines;
    * - a settings_ddnet.cfg file or console commands like "cl_dyncam_deadzone 300".
    *   Camera settings missing from it get their default, like the game does,
-   *   and inp_mousesens is only changed when the text has it.
+   *   and the preview settings are only changed when the text has them.
    * Returns { source: 'console' | 'commands', found, expected }: the number of values found,
    * and for console output the number of values the request asked for.
    */
@@ -180,7 +186,7 @@ export class ConfigStore {
 
     const found = readCommands(text);
     const count = Object.keys(found).length;
-    if (count) this.applyLoaded({ inp_mousesens: this.values.inp_mousesens, ...found });
+    if (count) this.applyLoaded({ ...this.previewValues(), ...found });
     return { source: 'commands', found: count, expected: count };
   }
 
@@ -215,13 +221,13 @@ export class ConfigStore {
   /**
    * Applies a link fragment made by shareFragment(). Every camera command first gets its DDNet default,
    * then the value of the link. Values out of range are clamped, like the game does.
-   * The map and the entities view work the same way. inp_mousesens and the baseline do not change.
+   * The map and the entities view work the same way. The preview settings and the baseline do not change.
    * Returns null once the link is applied, or the reason it cannot be read: nothing changes then.
    */
   loadShareFragment(fragment) {
     const link = readShareFragment(fragment);
     if (link.error) return link.error;
-    this.replaceValues({ ...link.values, inp_mousesens: this.values.inp_mousesens });
+    this.replaceValues({ ...link.values, ...this.previewValues() });
     this.dyncam = (link.values.cl_dyncam ?? DEFAULT_DYNCAM) >= 1;
     this.mapId = link.map ?? DEFAULT_MAP;
     this.entities = link.entities ?? false;
@@ -279,7 +285,7 @@ export class ConfigStore {
   }
 }
 
-const VALUE_NAME = /^(?:cl_dyncam|cl_(?:dyncam|mouse)_[a-z_]+|inp_mousesens)$/;
+const VALUE_NAME = /^(?:cl_dyncam|cl_(?:dyncam|mouse)_[a-z_]+|inp_mousesens|cl_default_zoom)$/;
 const isKnownName = (name) => name === 'cl_dyncam' || name in SETTINGS_BY_NAME;
 
 /**
@@ -333,7 +339,7 @@ function readConsoleOutput(text) {
 /** Reads "name value" pairs of a config file or of console commands. Returns { name: value }. */
 function readCommands(text) {
   const found = {};
-  const pattern = /\b(cl_dyncam|cl_(?:dyncam|mouse)_[a-z_]+|inp_mousesens)\s+"?(-?\d+)"?/g;
+  const pattern = /\b(cl_dyncam|cl_(?:dyncam|mouse)_[a-z_]+|inp_mousesens|cl_default_zoom)\s+"?(-?\d+)"?/g;
   for (const [, name, value] of text.matchAll(pattern)) {
     if (isKnownName(name)) found[name] = Number(value);
   }

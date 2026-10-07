@@ -125,9 +125,20 @@ export const SETTINGS = [
     defaultValue: 200,
     tip: 'Your usual mouse sensitivity.\nOnly for the preview with **Capture mouse**, not added to the commands.',
   },
+  {
+    name: 'cl_default_zoom',
+    group: 'preview',
+    min: 0,
+    max: 20,
+    defaultValue: 10,
+    tip: 'Zoom level. 10 = normal zoom.',
+  },
 ];
 
 export const SETTINGS_BY_NAME = Object.fromEntries(SETTINGS.map((setting) => [setting.name, setting]));
+
+/** Settings of the preview: the player's own mouse sensitivity and zoom, kept by loads, links and resets. */
+export const PREVIEW_SETTINGS = SETTINGS.filter((setting) => setting.group === 'preview');
 
 /** Camera settings, in the order used by share links. */
 export const CAMERA_SETTINGS = SETTINGS.filter((setting) => setting.group !== 'preview');

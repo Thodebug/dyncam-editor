@@ -337,24 +337,24 @@ async function start() {
 
   const distancesToggle = byId('distances-toggle');
   const readout = byId('readout');
-  distancesToggle.addEventListener('click', () => {
-    gameView.showDistances = !gameView.showDistances;
-    setSwitch(distancesToggle, gameView.showDistances);
-    readout.hidden = !gameView.showDistances;
-    byId('sidebar').classList.toggle('hide-colors', !gameView.showDistances);
+  const showDistances = (shown) => {
+    gameView.showDistances = shown;
+    setSwitch(distancesToggle, shown);
+    readout.hidden = !shown;
+    byId('sidebar').classList.toggle('hide-colors', !shown);
     gameView.requestRender();
-  });
+  };
+  distancesToggle.addEventListener('click', () => showDistances(!gameView.showDistances));
+  showDistances(true);
 
-  gameView.onFrame = ({ cursor, limits, offset }) => {
+  gameView.onFrame = ({ cursor, limits, offset, cursorOnScreen }) => {
     if (readout.hidden) return;
-    const onScreenX = cursor.position.x - offset.x;
-    const onScreenY = cursor.position.y - offset.y;
-    const towardCursor = Math.sign(onScreenX * cursor.direction.x + onScreenY * cursor.direction.y || 1);
+    const towardCursor = Math.sign(cursorOnScreen.x * cursor.direction.x + cursorOnScreen.y * cursor.direction.y || 1);
     setText(byId('readout-cursor'), Math.round(cursor.distance));
     setText(byId('readout-cursor-max'), Math.round(limits.effectiveMax));
     setText(byId('readout-offset'), Math.round(Math.hypot(offset.x, offset.y)));
     setText(byId('readout-offset-max'), Math.round(cameraOffsetAt(limits.effectiveMax, limits)));
-    setText(byId('readout-screen'), signed(Math.round(Math.hypot(onScreenX, onScreenY) * towardCursor)));
+    setText(byId('readout-screen'), signed(Math.round(Math.hypot(cursorOnScreen.x, cursorOnScreen.y) * towardCursor)));
   };
 
   new ResizeObserver(() => gameView.resize()).observe(stage);

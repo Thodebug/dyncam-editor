@@ -83,7 +83,7 @@ function settingTip(setting, values) {
 
 /**
  * The settings column: one row per setting (name, info tooltip, number input, slider, message),
- * grouped in the cl_dyncam 1, cl_dyncam 0 and Capture mouse blocks.
+ * grouped in the cl_dyncam 1, cl_dyncam 0 and Preview blocks.
  * Clicking a camera block shows that camera mode in the game view.
  */
 export class SettingsPanel {

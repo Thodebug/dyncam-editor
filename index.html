@@ -15,7 +15,7 @@
     <header class="tab-bar">
       <div class="tab tab-title">
         Dyncam editor
-        <span class="version">v0.24</span>
+        <span class="version">v0.25</span>
       </div>
       <div class="tab-group">
         <button class="tab tab-checkbox" id="dyncam-toggle" type="button" role="switch" aria-checked="true"
@@ -30,7 +30,7 @@
         </button>
       </div>
       <div class="tab-group">
-        <button class="tab tab-checkbox" id="distances-toggle" type="button" role="switch" aria-checked="false"
+        <button class="tab tab-checkbox" id="distances-toggle" type="button" role="switch" aria-checked="true"
           data-tip="Circles and live values.">
           <span class="checkbox"><span class="icon">&#xF00D;</span></span>Show distances
         </button>
@@ -65,7 +65,7 @@
             <canvas id="game-canvas" role="img" aria-label="Game view: hover to aim"></canvas>
             <button class="snapshot-button" id="snapshot-button" type="button" aria-label="Copy image"
               data-tip="Copy an image for Discord."><span class="icon" id="snapshot-icon">&#xF030;</span></button>
-            <div class="readout" id="readout" hidden>
+            <div class="readout" id="readout">
               <span>Cursor distance: <b id="readout-cursor">0</b> / <span id="readout-cursor-max">0</span></span>
               <span>Camera offset: <b id="readout-offset">0</b> / <span id="readout-offset-max">0</span></span>
               <span>Cursor on screen: <b id="readout-screen">0</b></span>
@@ -84,7 +84,7 @@
         </div>
       </section>
 
-      <aside class="sidebar hide-colors" id="sidebar">
+      <aside class="sidebar" id="sidebar">
         <section class="section">
           <h2>
             Commands
@@ -138,7 +138,7 @@
         </section>
 
         <section class="section block" id="block-preview">
-          <div class="block-title">Capture mouse</div>
+          <div class="block-title">Preview</div>
           <div id="settings-preview"></div>
         </section>
       </aside>

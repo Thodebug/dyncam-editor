@@ -1,4 +1,4 @@
-import { CameraSmoothing, cameraOffsetAt, cursorFromMouse, cursorLimits } from './camera.js';
+import { CameraSmoothing, cameraOffsetAt, cursorFromMouse, cursorLimits, zoomOfLevel } from './camera.js';
 import { PRIMITIVE_STRIDE } from './graphics.js';
 import { calcScreenParams, mapScreenToWorld } from './map-renderer.js';
 import { gameTick } from './player.js';
@@ -43,7 +43,7 @@ export class GameView {
     this.tee = tee;
     this.camera = new CameraSmoothing();
 
-    this.showDistances = false;
+    this.showDistances = true;
     this.focusedSetting = null;
     this.onFrame = null;
 
@@ -129,8 +129,19 @@ export class GameView {
       now,
     );
     const offset = this.camera.offset;
+    const zoom = zoomOfLevel(this.store.values.cl_default_zoom);
     this.scale = width / this.screen.width;
-    this.onFrame?.({ cursor, limits, offset });
+
+    // CControls::OnRender(): the cursor target, relative to the tee. While a smooth camera catches up,
+    // the cursor is moved so it stays still in the world when zoomed.
+    const lag = { x: targetOffset.x - offset.x, y: targetOffset.y - offset.y };
+    const target = {
+      x: cursor.position.x - lag.x + lag.x / zoom,
+      y: cursor.position.y - lag.y + lag.y / zoom,
+    };
+    // The cursor is drawn at zoom 1 around the camera center: its place on the screen, from the center
+    const cursorOnScreen = { x: target.x - offset.x, y: target.y - offset.y };
+    this.onFrame?.({ cursor, limits, offset, cursorOnScreen });
 
     graphics.setViewport(width, height);
     graphics.setBlend('normal');
@@ -139,9 +150,9 @@ export class GameView {
     // Map behind the players, then the laser, the hook and the tee, then the map in front (CGameClient::OnRender order)
     const center = { x: this.tee.x + offset.x, y: this.tee.y + offset.y };
     const entities = this.store.entities;
-    this.map.render('background', center, this.aspect, 1, entities);
+    this.map.render('background', center, this.aspect, zoom, entities);
 
-    const world = mapScreenToWorld(center.x, center.y, 100, 100, 100, 0, 0, this.aspect, 1);
+    const world = mapScreenToWorld(center.x, center.y, 100, 100, 100, 0, 0, this.aspect, zoom);
     graphics.mapScreen(world.left, world.top, world.right, world.bottom);
     const tick = gameTick(now);
     this.player.update(now, cursor.position);
@@ -152,18 +163,21 @@ export class GameView {
     if (hookPosition) this.renderer.drawHook(this.tee, hookPosition);
     this.renderer.drawPlayer(this.tee, cursor.direction, this.player.weapon, this.player.pose(now));
 
-    this.map.render('foreground', center, this.aspect, 1, entities);
+    this.map.render('foreground', center, this.aspect, zoom, entities);
 
     // Distance circles around the tee, all of them or the one of the hovered setting
     graphics.mapScreen(0, 0, width, height);
-    const teeOnCanvas = { x: width / 2 - offset.x * this.scale, y: height / 2 - offset.y * this.scale };
-    if (this.showDistances) this.drawRings(limits, teeOnCanvas, null);
-    else if (this.focusedSetting) this.drawRings(limits, teeOnCanvas, this.focusedSetting);
+    const teeOnCanvas = {
+      x: width / 2 - (offset.x / zoom) * this.scale,
+      y: height / 2 - (offset.y / zoom) * this.scale,
+    };
+    if (this.showDistances) this.drawRings(limits, zoom, teeOnCanvas, null);
+    else if (this.focusedSetting) this.drawRings(limits, zoom, teeOnCanvas, this.focusedSetting);
 
     // The cursor is part of the HUD, drawn at zoom 1 (CHud::RenderCursor())
-    graphics.mapScreen(world.left, world.top, world.right, world.bottom);
-    const target = { x: this.tee.x + cursor.position.x, y: this.tee.y + cursor.position.y };
-    this.renderer.drawCursor(target, this.player.weapon);
+    const hud = mapScreenToWorld(center.x, center.y, 100, 100, 100, 0, 0, this.aspect, 1);
+    graphics.mapScreen(hud.left, hud.top, hud.right, hud.bottom);
+    this.renderer.drawCursor({ x: this.tee.x + target.x, y: this.tee.y + target.y }, this.player.weapon);
 
     const hint = hideHint ? '' : this.pointer.hint();
     if (hint) {
@@ -273,8 +287,11 @@ export class GameView {
 
   /* ---------- Distance circles ---------- */
 
-  /** Circles to draw: [{ radius, color, label, faint, dotted, setting }] */
-  rings(limits) {
+  /**
+   * Circles to draw: [{ radius, color, label, faint, dotted, setting }].
+   * Radii are in screen units at zoom 1, around the tee as the screen shows it.
+   */
+  rings(limits, zoom) {
     const dyncam = this.store.dyncam;
     const prefix = dyncam ? 'cl_dyncam_' : 'cl_mouse_';
     const maxColor = this.colorOf(dyncam ? '--ring-dyncam-max' : '--ring-mouse-max');
@@ -336,6 +353,14 @@ export class GameView {
       });
     }
 
+    // The cursor is drawn at zoom 1 but the tee moves with the zoomed map: when the camera follows,
+    // the cursor at a distance d is d − offset × (1 − 1 / zoom) away from the tee on the screen.
+    // The camera center is offset / zoom away from it.
+    for (const ring of rings) {
+      ring.radius = ring.dotted
+        ? ring.radius / zoom
+        : Math.abs(ring.radius - cameraOffsetAt(ring.radius, limits) * (1 - 1 / zoom));
+    }
     return rings.filter((ring) => ring.radius > 0);
   }
 
@@ -344,8 +369,8 @@ export class GameView {
    * and are skipped when they would overlap another label.
    * The circles are drawn with WebGL; each label is a small canvas, reused while it does not change.
    */
-  drawRings(limits, center, onlySetting) {
-    let rings = this.rings(limits);
+  drawRings(limits, zoom, center, onlySetting) {
+    let rings = this.rings(limits, zoom);
     if (onlySetting) rings = rings.filter((ring) => ring.setting === onlySetting);
     if (!rings.length) return;
 

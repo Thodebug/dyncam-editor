@@ -20,6 +20,7 @@ This editor shows what each value does exactly as the game draws them.
 - 16:9, 16:10, 4:3 and 21:9 screens
 - Every camera setting with the game's ranges and defaults
 - Capture mouse: the cursor moves with your in-game sensitivity
+- Zoom levels of the game, one step per press of + or −
 - Show distances: visual representation of the different camera options (deadzone, camera offset, etc.)
 - Starting values read from the game console or from `settings_ddnet.cfg`
 - Output as console commands, a share link or an image
@@ -122,7 +123,7 @@ DDNet function each part comes from.
 
 ## Scope
 
-The game view is a camera preview, not a playable game: it shows what you see while aiming, at the default zoom.
+The game view is a camera preview, not a playable game: it shows what you see while aiming.
 It needs a browser with WebGL 2.
 
 ## Privacy

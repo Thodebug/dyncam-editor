@@ -7,6 +7,17 @@
 /** CameraMaxDistance in CControls::GetMaxMouseDistance(): the largest camera offset. */
 export const CAMERA_MAX_DISTANCE = 200;
 
+/** CCamera::ZOOM_STEP: zoom factor of one press of zoom+ or zoom-. */
+const ZOOM_STEP = Math.fround(0.866025);
+
+/**
+ * CCamera::ZoomStepsToValue(cl_default_zoom - 10): the zoom of a zoom level, in 32-bit floats.
+ * 1 at level 10; above 1 the screen shows more of the map.
+ */
+export function zoomOfLevel(level) {
+  return Math.fround(Math.pow(ZOOM_STEP, level - 10));
+}
+
 /** Cursor and camera settings of the active camera mode. */
 export function cursorLimits(values, dyncam) {
   const limits = dyncam
