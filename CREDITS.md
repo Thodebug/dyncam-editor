@@ -24,19 +24,19 @@ Licensed under the [zlib license](https://github.com/ddnet/ddnet/blob/master/lic
 
 ## Graphics
 
-| Files | Source | License |
-|---|---|---|
-| `assets/map/*.map` | `data/maps/` of DDNet (ctf1–7, dm1, dm2, dm6–9) | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
-| `assets/mapres/*.png` | `data/mapres/` of DDNet | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
-| `assets/entities/ddnet.png` | `data/editor/entities_clear/ddnet.png` of DDNet, with the tiles DDNet hides on DDNet servers removed | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
-| `assets/sprites/game.png`, `assets/sprites/particles.png` | `data/game.png` and `data/particles.png` of DDNet | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
-| `assets/sprites/blob.png` | `data/blob.png` of DDNet, resized to 128×128 | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
-| `assets/help/settings-file.webp` | Capture of the DDNet settings menu, with marks added | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
-| `assets/sprites/skin-default.png` | `data/skins/default.png` of DDNet, Copyright Magnus Auvinen | zlib |
+| Files                                                     | Source                                                                                               | License                                                         |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `assets/map/*.map`                                        | `data/maps/` of DDNet (ctf1–7, dm1, dm2, dm6–9)                                                      | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
+| `assets/mapres/*.png`                                     | `data/mapres/` of DDNet                                                                              | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
+| `assets/entities/ddnet.png`                               | `data/editor/entities_clear/ddnet.png` of DDNet, with the tiles DDNet hides on DDNet servers removed | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
+| `assets/sprites/game.png`, `assets/sprites/particles.png` | `data/game.png` and `data/particles.png` of DDNet                                                    | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
+| `assets/sprites/blob.png`                                 | `data/blob.png` of DDNet, resized to 128×128                                                         | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
+| `assets/help/settings-file.webp`                          | Capture of the DDNet settings menu, with marks added                                                 | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/) |
+| `assets/sprites/skin-default.png`                         | `data/skins/default.png` of DDNet, Copyright Magnus Auvinen                                          | zlib                                                            |
 
 ## Fonts
 
-| File | Source | License |
-|---|---|---|
-| `assets/fonts/dejavu-sans.woff2` | Subset of [DejaVu Sans](https://dejavu-fonts.github.io/). Fonts are (c) Bitstream, DejaVu changes are in the public domain | [Bitstream Vera license](https://dejavu-fonts.github.io/License.html) |
-| `assets/fonts/icons.woff2` | Subset of Font Awesome Free 6 Solid, Copyright (c) 2023 Fonticons, Inc. (https://fontawesome.com), with Reserved Font Name "Font Awesome". Renamed "Dyncam Icons" | [SIL Open Font License 1.1](https://openfontlicense.org) |
+| File                             | Source                                                                                                                                                            | License                                                               |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `assets/fonts/dejavu-sans.woff2` | Subset of [DejaVu Sans](https://dejavu-fonts.github.io/). Fonts are (c) Bitstream, DejaVu changes are in the public domain                                        | [Bitstream Vera license](https://dejavu-fonts.github.io/License.html) |
+| `assets/fonts/icons.woff2`       | Subset of Font Awesome Free 6 Solid, Copyright (c) 2023 Fonticons, Inc. (https://fontawesome.com), with Reserved Font Name "Font Awesome". Renamed "Dyncam Icons" | [SIL Open Font License 1.1](https://openfontlicense.org)              |

@@ -81,7 +81,10 @@ export class MapRenderer {
       };
     });
     const entitiesTexture = graphics.createTileArrayTexture(graphics.readImagePixels(this.entities));
-    this.textures = [entitiesTexture, ...textures.flatMap((texture) => (texture ? [texture.array, texture.flat] : []))].filter(Boolean);
+    this.textures = [
+      entitiesTexture,
+      ...textures.flatMap((texture) => (texture ? [texture.array, texture.flat] : [])),
+    ].filter(Boolean);
 
     this.background = [];
     this.foreground = [];
@@ -189,7 +192,12 @@ function createTileLayer(graphics, layer, texture) {
   const tiles = [];
   // Edge tiles: the 4 corners, then the left, right, top and bottom edges
   const corners = { topLeft: null, topRight: null, bottomLeft: null, bottomRight: null };
-  const edges = { left: new Array(height).fill(null), right: new Array(height).fill(null), top: new Array(width).fill(null), bottom: new Array(width).fill(null) };
+  const edges = {
+    left: new Array(height).fill(null),
+    right: new Array(height).fill(null),
+    top: new Array(width).fill(null),
+    bottom: new Array(width).fill(null),
+  };
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
@@ -261,7 +269,15 @@ function drawTileLayer(graphics, layer) {
 
   // CRenderLayerTile::RenderTileBorder()
   const draw = (first, count, offsetX, offsetY, scaleX, scaleY) =>
-    graphics.drawBorderTiles(layer.buffer, layer.texture, layer.color, first, count, [offsetX * 32, offsetY * 32], [scaleX, scaleY]);
+    graphics.drawBorderTiles(
+      layer.buffer,
+      layer.texture,
+      layer.color,
+      first,
+      count,
+      [offsetX * 32, offsetY * 32],
+      [scaleX, scaleY],
+    );
   const corner = (name, offsetX, offsetY, scaleX, scaleY) => {
     if (layer.cornerAt[name] >= 0) draw(layer.cornerAt[name], 1, offsetX, offsetY, scaleX, scaleY);
   };

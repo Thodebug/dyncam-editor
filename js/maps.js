@@ -11,7 +11,16 @@ export const MAPS = [
   {
     id: 'ctf2',
     tee: { x: 1648, y: 657 },
-    images: ['moon', 'snow', 'stars', 'winter_doodads', 'winter_main', 'winter_mountains', 'winter_mountains2', 'winter_mountains3'],
+    images: [
+      'moon',
+      'snow',
+      'stars',
+      'winter_doodads',
+      'winter_main',
+      'winter_mountains',
+      'winter_mountains2',
+      'winter_mountains3',
+    ],
   },
   {
     id: 'ctf3',
@@ -32,7 +41,14 @@ export const MAPS = [
   {
     id: 'ctf6',
     tee: { x: 1392, y: 561 },
-    images: ['grass_main', 'jungle_background', 'jungle_deathtiles', 'jungle_doodads', 'jungle_main', 'jungle_midground'],
+    images: [
+      'grass_main',
+      'jungle_background',
+      'jungle_deathtiles',
+      'jungle_doodads',
+      'jungle_main',
+      'jungle_midground',
+    ],
   },
   { id: 'ctf7', tee: { x: 176, y: 689 }, images: ['grass_doodads', 'grass_main', 'mountains', 'sun'] },
   {

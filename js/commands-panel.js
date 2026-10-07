@@ -103,7 +103,12 @@ export class CommandsPanel {
       this.pasteInput.value = url;
       this.pasteInput.select();
     }
-    flashLabel(document.getElementById('share-label'), copied ? 'Link copied' : 'Copy the link below', 'Share link', 1800);
+    flashLabel(
+      document.getElementById('share-label'),
+      copied ? 'Link copied' : 'Copy the link below',
+      'Share link',
+      1800,
+    );
   }
 
   /** Copies the console line that prints the values. If the clipboard is blocked, selects it to copy by hand. */

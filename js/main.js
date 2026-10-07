@@ -222,7 +222,14 @@ async function start() {
     const firstMap = !graphics;
     const steps = firstMap ? 3 : 2;
     const [downloaded] = await Promise.all([
-      download({ map: `assets/map/${id}.map`, ...imageUrls, ...(firstMap ? { ...SPRITE_IMAGES, entities: ENTITIES_IMAGE } : {}) }, id),
+      download(
+        {
+          map: `assets/map/${id}.map`,
+          ...imageUrls,
+          ...(firstMap ? { ...SPRITE_IMAGES, entities: ENTITIES_IMAGE } : {}),
+        },
+        id,
+      ),
       firstMap ? document.fonts.load('12px "DejaVu Sans"').catch(() => {}) : null,
     ]);
     loadingScreen.showPreparing(0, steps);

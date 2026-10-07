@@ -108,7 +108,8 @@ function readQuads(bytes, count) {
   for (let i = 0; i < count; i++) {
     const base = i * 38;
     const points = [];
-    for (let p = 0; p < 5; p++) points.push({ x: fixedToFloat(values[base + p * 2]), y: fixedToFloat(values[base + p * 2 + 1]) });
+    for (let p = 0; p < 5; p++)
+      points.push({ x: fixedToFloat(values[base + p * 2]), y: fixedToFloat(values[base + p * 2 + 1]) });
     const colors = [];
     for (let c = 0; c < 4; c++) colors.push([0, 1, 2, 3].map((channel) => values[base + 10 + c * 4 + channel]));
     const texcoords = [];
@@ -134,7 +135,8 @@ export async function readMap(buffer) {
     // CMapItemImage: version, width, height, external, name, data (RGBA bytes for embedded images)
     file.itemsOfType(ITEM_TYPE_IMAGE).map(async (item) => {
       const image = { external: item[3] !== 0, name: await file.string(item[4]) };
-      if (!image.external) Object.assign(image, { width: item[1], height: item[2], data: await file.dataBlock(item[5]) });
+      if (!image.external)
+        Object.assign(image, { width: item[1], height: item[2], data: await file.dataBlock(item[5]) });
       return image;
     }),
   );

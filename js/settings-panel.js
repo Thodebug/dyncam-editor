@@ -96,7 +96,10 @@ export class SettingsPanel {
 
     for (const setting of SETTINGS) this.rows.push(this.createRow(setting, onFocus));
 
-    for (const [block, dyncam] of [[this.dyncamBlock, true], [this.mouseBlock, false]]) {
+    for (const [block, dyncam] of [
+      [this.dyncamBlock, true],
+      [this.mouseBlock, false],
+    ]) {
       block.addEventListener('pointerdown', () => store.setDyncam(dyncam), true);
       block.addEventListener('focusin', () => store.setDyncam(dyncam));
     }
@@ -122,7 +125,8 @@ export class SettingsPanel {
       </div>
       <div class="setting-message" hidden></div>`;
 
-    if (setting.ringColor) row.querySelector('.setting-color').style.setProperty('--ring-color', `var(${setting.ringColor})`);
+    if (setting.ringColor)
+      row.querySelector('.setting-color').style.setProperty('--ring-color', `var(${setting.ringColor})`);
     const infoButton = row.querySelector('.info-button');
     infoButton.classList.add('has-tip');
     infoButton.tipContent = () => settingTip(setting, this.store.values);

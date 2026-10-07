@@ -118,11 +118,16 @@ export class GameView {
     const limits = cursorLimits(this.store.values, this.store.dyncam);
     const cursor = cursorFromMouse(this.pointer.mouse, limits);
     const targetOffset = { x: cursor.direction.x * cursor.cameraOffset, y: cursor.direction.y * cursor.cameraOffset };
-    const cameraMoving = this.camera.update(cursor.position, targetOffset, {
-      smoothness: this.store.values.cl_dyncam_smoothness,
-      stabilizing: this.store.values.cl_dyncam_stabilizing,
-      dyncam: this.store.dyncam,
-    }, now);
+    const cameraMoving = this.camera.update(
+      cursor.position,
+      targetOffset,
+      {
+        smoothness: this.store.values.cl_dyncam_smoothness,
+        stabilizing: this.store.values.cl_dyncam_stabilizing,
+        dyncam: this.store.dyncam,
+      },
+      now,
+    );
     const offset = this.camera.offset;
     this.scale = width / this.screen.width;
     this.onFrame?.({ cursor, limits, offset });
@@ -369,7 +374,14 @@ export class GameView {
       const radius = ring.radius * scale;
       const [red, green, blue] = this.rgbOf(ring.color);
       this.graphics.drawRing(center.x, center.y, radius, (ring.faint ? 3 : 4.2) * ratio, [0, 0, 0, 0.45 * alpha], dash);
-      this.graphics.drawRing(center.x, center.y, radius, (ring.faint ? 1.5 : 2.2) * ratio, [red, green, blue, alpha], dash);
+      this.graphics.drawRing(
+        center.x,
+        center.y,
+        radius,
+        (ring.faint ? 1.5 : 2.2) * ratio,
+        [red, green, blue, alpha],
+        dash,
+      );
     }
 
     // Each label is its own small canvas, so a label moving to the other side of its circle redraws only that label.

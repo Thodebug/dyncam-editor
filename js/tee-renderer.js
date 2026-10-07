@@ -36,12 +36,24 @@ function packedHslToRgb(packed) {
   const second = f(chroma * f(1 - Math.abs(f(sector % 2) - 1)));
   let rgb;
   switch (Math.trunc(sector)) {
-    case 0: rgb = [chroma, second, 0]; break;
-    case 1: rgb = [second, chroma, 0]; break;
-    case 2: rgb = [0, chroma, second]; break;
-    case 3: rgb = [0, second, chroma]; break;
-    case 4: rgb = [second, 0, chroma]; break;
-    default: rgb = [chroma, 0, second]; break;
+    case 0:
+      rgb = [chroma, second, 0];
+      break;
+    case 1:
+      rgb = [second, chroma, 0];
+      break;
+    case 2:
+      rgb = [0, chroma, second];
+      break;
+    case 3:
+      rgb = [0, second, chroma];
+      break;
+    case 4:
+      rgb = [second, 0, chroma];
+      break;
+    default:
+      rgb = [chroma, 0, second];
+      break;
   }
   const match = f(lightness - f(chroma / 2));
   return rgb.map((channel) => f(channel + match));
@@ -95,7 +107,9 @@ export class TeeRenderer {
       const cellWidth = pixels.width / gridX;
       const cellHeight = pixels.height / gridY;
       return ([x, y, width, height]) =>
-        graphics.createTexture(cropPixels(pixels, x * cellWidth, y * cellHeight, width * cellWidth, height * cellHeight));
+        graphics.createTexture(
+          cropPixels(pixels, x * cellWidth, y * cellHeight, width * cellWidth, height * cellHeight),
+        );
     };
 
     // Skin sprites (grid of 8 × 4 cells)

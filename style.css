@@ -32,6 +32,9 @@
   /* ui_color (default 0xE4A046AF) with full opacity */
   --ui-color: rgb(153, 163, 197);
 
+  /* Dark squares of the menu background checkerboard */
+  --checker: rgba(0, 0, 0, 0.045);
+
   --tab: rgba(0, 0, 0, 0.25);
   --tab-hover: rgba(255, 255, 255, 0.25);
   --page: rgba(0, 0, 0, 0.5);
@@ -93,7 +96,7 @@ body {
     0 -1px var(--text-outline);
   background:
     radial-gradient(ellipse 122vh 83vh at 50% 50%, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.498) 96.6%) fixed,
-    conic-gradient(rgba(0, 0, 0, 0.045) 0 25%, transparent 0 50%, rgba(0, 0, 0, 0.045) 0 75%, transparent 0) 0 0 / 10vh 10vh fixed,
+    conic-gradient(var(--checker) 0 25%, transparent 0 50%, var(--checker) 0 75%, transparent 0) 0 0 / 10vh 10vh fixed,
     var(--ui-color);
 }
 
@@ -656,7 +659,9 @@ h2 .info-button {
 
 /* The block of the camera mode shown in the game view is highlighted; the other one can be clicked */
 .mode-block {
-  transition: background-color 0.15s, box-shadow 0.15s;
+  transition:
+    background-color 0.15s,
+    box-shadow 0.15s;
 }
 
 .mode-block.is-active {

@@ -1,2 +1,4 @@
 assets/
 package-lock.json
+# Hand formatted: Prettier splits inline tags at their brackets to keep their spacing
+index.html

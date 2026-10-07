@@ -54,7 +54,9 @@ export class PointerInput {
   hint() {
     if (this.captureEnabled && !this.captured) return 'Click to capture the mouse · Esc to release';
     if (this.mouse) return '';
-    return matchMedia('(pointer: coarse)').matches ? 'Drag on the screen to aim' : 'Move the mouse over the screen to aim';
+    return matchMedia('(pointer: coarse)').matches
+      ? 'Drag on the screen to aim'
+      : 'Move the mouse over the screen to aim';
   }
 
   setCaptureEnabled(enabled) {
@@ -201,7 +203,8 @@ export class PointerInput {
   onCapturedMove(event) {
     if (!this.captured) return;
     const values = this.store.values;
-    const sensitivity = this.store.dyncam && values.cl_dyncam_mousesens ? values.cl_dyncam_mousesens : values.inp_mousesens;
+    const sensitivity =
+      this.store.dyncam && values.cl_dyncam_mousesens ? values.cl_dyncam_mousesens : values.inp_mousesens;
     const limits = this.limits();
     const mouse = this.mouse ?? { x: limits.effectiveMax, y: 0 };
     this.setMouse(

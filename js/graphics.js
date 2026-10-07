@@ -468,7 +468,10 @@ export class Graphics {
       for (let corner = 0; corner < 4; corner++) {
         texcoords.set([texX[corner], texY[corner], tile.index, rotated], i * 16 + corner * 4);
       }
-      indices.set([0, 1, 2, 0, 2, 3].map((index) => i * 4 + index), i * 6);
+      indices.set(
+        [0, 1, 2, 0, 2, 3].map((index) => i * 4 + index),
+        i * 6,
+      );
     });
     // rowStarts[y]: number of tiles before row y
     const rowStarts = new Uint32Array(height + 1);
@@ -552,14 +555,14 @@ export class Graphics {
     quads.forEach((quad, i) => {
       [0, 1, 3, 2].forEach((point, corner) => {
         const offset = (i * 4 + corner) * strideBytes;
-        floats.set(
-          [quad.points[point].x, quad.points[point].y, quad.points[4].x, quad.points[4].y],
-          offset / 4,
-        );
+        floats.set([quad.points[point].x, quad.points[point].y, quad.points[4].x, quad.points[4].y], offset / 4);
         bytes.set(quad.colors[point], offset + 16);
         floats.set([quad.texcoords[point].u, quad.texcoords[point].v], (offset + 20) / 4);
       });
-      indices.set([0, 1, 2, 0, 2, 3].map((index) => i * 4 + index), i * 6);
+      indices.set(
+        [0, 1, 2, 0, 2, 3].map((index) => i * 4 + index),
+        i * 6,
+      );
     });
 
     const array = gl.createVertexArray();
