@@ -15,7 +15,7 @@ This editor shows what each value does exactly as the game draws them.
 - The game view drawn from the game's own files and shaders: maps, textures, tee, weapons and cursor
 - 13 vanilla maps: ctf1 to ctf7, dm1, dm2, dm6 to dm9
 - 16:9, 16:10, 4:3 and 21:9 screens
-- Every camera setting** with the game's ranges and defaults
+- Every camera setting with the game's ranges and defaults
 - Capture mouse: the cursor moves with your in-game sensitivity
 - Show distances: visual representation of the different camera options (deadzone, camera offset, etc.)
 - Starting values read from the game console or from `settings_ddnet.cfg`
