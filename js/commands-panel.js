@@ -3,6 +3,8 @@ import { ConfigHelp } from './config-help.js';
 import { copyText, flashLabel } from './clipboard.js';
 
 const UNDO_RESET_MS = 5000;
+/** Largest text read as a config. settings_ddnet.cfg is about 50 KB; a larger text is not a config. */
+const MAX_CONFIG_SIZE = 1024 * 1024;
 const COPY_ICON = '\uF0C5';
 const CHECK_ICON = '\uF00C';
 
@@ -143,6 +145,10 @@ export class CommandsPanel {
    * otherwise the message in the box says what is missing.
    */
   loadConfig(text) {
+    if (text.length > MAX_CONFIG_SIZE) {
+      this.pasteMessage.textContent = 'This text is too big to be a DDNet config.';
+      return;
+    }
     const before = { ...this.store.values };
     const { source: format, found, expected } = this.store.loadConfigText(text);
     const changed = Object.keys(before).filter((name) => this.store.values[name] !== before[name]);
@@ -194,6 +200,10 @@ export class CommandsPanel {
       this.openLoadBox();
       if (!file || !file.name.toLowerCase().endsWith('.cfg')) {
         this.pasteMessage.textContent = 'Drop a .cfg file, like settings_ddnet.cfg.';
+        return;
+      }
+      if (file.size > MAX_CONFIG_SIZE) {
+        this.pasteMessage.textContent = 'This file is too big to be a DDNet config.';
         return;
       }
       this.loadConfig(await file.text());

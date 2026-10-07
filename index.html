@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' blob:; connect-src 'self'; base-uri 'none'; form-action 'none'">
   <title>Dyncam editor</title>
   <meta name="description" content="Set the DDNet camera settings (cl_dyncam_*, cl_mouse_*) on the real game view and copy the console commands.">
   <link rel="preload" href="assets/fonts/dejavu-sans.woff2" as="font" type="font/woff2" crossorigin>
@@ -14,7 +15,7 @@
     <header class="tab-bar">
       <div class="tab tab-title">
         Dyncam editor
-        <span class="version">v0.19</span>
+        <span class="version">v0.20</span>
       </div>
       <div class="tab-group">
         <button class="tab tab-checkbox" id="dyncam-toggle" type="button" role="switch" aria-checked="true"
